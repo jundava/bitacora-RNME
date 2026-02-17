@@ -1,0 +1,1326 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bitácora RNME - ANTSV</title>
+  
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  
+  <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.3/dist/sweetalert2.min.css" rel="stylesheet">
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.3/dist/sweetalert2.all.min.js"></script>
+
+  <style>
+    /* ========================================== */
+    /* PALETA DE COLORES INSTITUCIONAL ANTSV      */
+    /* ========================================== */
+    :root {
+      --antsv-dark: #243F5C;   /* Azul Oscuro: Fondos, contornos y texto principal */
+      --antsv-green: #84B74C;  /* Verde: Acciones primarias, botones, resaltados */
+      --antsv-light: #E4EEF4;  /* Celeste Claro: Fondo interior y base general */
+      --antsv-white: #FFFFFF;  /* Blanco Puro: Textos en fondos oscuros y tarjetas */
+    }
+
+    [v-cloak] { display: none; }
+    
+    body { 
+      background-color: var(--antsv-light); 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+      color: var(--antsv-dark);
+      overflow-x: hidden;
+    }
+
+    /* SOBRESCRIBIR BOOTSTRAP */
+    .btn-primary { background-color: var(--antsv-green); border-color: var(--antsv-green); color: var(--antsv-white); }
+    .btn-primary:hover { background-color: #72a33c; border-color: #72a33c; }
+    .btn-outline-primary { color: var(--antsv-dark); border-color: var(--antsv-dark); }
+    .btn-outline-primary:hover { background-color: var(--antsv-dark); color: var(--antsv-white); }
+    .text-primary { color: var(--antsv-dark) !important; }
+    
+    .card { border: none; border-radius: 10px; box-shadow: 0 4px 6px rgba(36, 63, 92, 0.08); background-color: var(--antsv-white); }
+    .card-header { background-color: var(--antsv-dark); color: var(--antsv-white); border-radius: 10px 10px 0 0 !important; border-bottom: none;}
+    .table-light { background-color: var(--antsv-light); color: var(--antsv-dark); }
+
+    /* OVERLAY CARGA */
+    .loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(228, 238, 244, 0.95); z-index: 1060; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+    
+    /* ZONA DRAG & DROP */
+    .drag-drop-zone { border: 2px dashed var(--antsv-green); border-radius: 8px; padding: 2.5rem 1rem; text-align: center; background-color: rgba(132, 183, 76, 0.05); cursor: pointer; transition: 0.3s; }
+    .drag-drop-zone:hover { background-color: rgba(132, 183, 76, 0.15); }
+    .drag-drop-zone i { color: var(--antsv-green); transition: 0.3s; }
+    .drag-drop-zone:hover i { transform: translateY(-5px); }
+
+    /* ========================================== */
+    /* LAYOUT: SIDEBAR Y RESPONSIVE               */
+    /* ========================================== */
+    .wrapper { display: flex; width: 100%; align-items: stretch; }
+    
+    #sidebar {
+      min-width: 250px;
+      max-width: 250px;
+      background: var(--antsv-dark);
+      color: var(--antsv-white);
+      transition: all 0.3s;
+      min-height: 100vh;
+      position: fixed;
+      z-index: 1040;
+    }
+    
+    #sidebar .sidebar-header { padding: 20px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); }
+    #sidebar .sidebar-header img { max-width: 120px; margin-bottom: 10px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+    
+    #sidebar ul p { color: var(--antsv-white); padding: 10px; }
+    #sidebar ul li a { padding: 15px 20px; font-size: 1.1em; display: block; color: var(--antsv-light); text-decoration: none; border-left: 4px solid transparent; transition: 0.2s;}
+    #sidebar ul li a:hover, #sidebar ul li a.active-link { background: rgba(255,255,255,0.05); color: var(--antsv-white); border-left: 4px solid var(--antsv-green); }
+    #sidebar ul li a i { font-size: 1.2rem; width: 30px; display: inline-block; text-align: center; }
+    
+    #content {
+      width: 100%;
+      padding: 0;
+      min-height: 100vh;
+      transition: all 0.3s;
+      margin-left: 250px; /* Espacio del sidebar en Desktop */
+    }
+
+    /* TOP NAVBAR INTERNO */
+    .top-navbar { background-color: var(--antsv-white); padding: 15px 25px; box-shadow: 0 2px 4px rgba(36, 63, 92, 0.05); display: flex; justify-content: space-between; align-items: center; }
+
+    /* MOBILE MEDIA QUERIES */
+    @media (max-width: 768px) {
+      #sidebar { margin-left: -250px; }
+      #sidebar.active { margin-left: 0; }
+      #content { margin-left: 0; }
+      .overlay-mobile { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 1030; display: none; }
+      .overlay-mobile.active { display: block; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="app" v-cloak>
+  <div v-if="isLoading" class="loading-overlay">
+    <div class="spinner-border" style="width: 4rem; height: 4rem; color: var(--antsv-dark);" role="status"></div>
+    <h4 class="mt-4" style="color: var(--antsv-dark); font-weight: bold;">{{ loadingMessage }}</h4>
+  </div>
+
+  <div v-else-if="config.MODO_MANTENIMIENTO === 'True' && role !== 'DIRECTOR'" class="container text-center mt-5">
+    <img :src="logoANTSV" alt="ANTSV" style="max-width: 200px;" class="mb-4">
+    <h1 style="color: var(--antsv-dark);"><i class="bi bi-tools me-2"></i>Sistema en Mantenimiento</h1>
+    <p class="lead">La Bitácora RNME está bajo actualización. Contacte a <strong style="color: var(--antsv-green);">{{ config.EMAIL_SOPORTE_TECNICO }}</strong>.</p>
+  </div>
+
+  <div class="wrapper" v-else>
+    
+    <nav id="sidebar" :class="{ 'active': isMobileMenuOpen }" v-if="role !== 'PUBLIC'">
+      <div class="sidebar-header">
+        <img :src="logoANTSV" alt="Logo RNME">
+        <h6 class="mt-2 text-uppercase fw-bold" style="color: var(--antsv-green);">Bitácora RNME</h6>
+        <span class="badge" style="background-color: var(--antsv-green);"><i class="bi bi-person-badge me-1"></i>{{ role }}</span>
+      </div>
+
+      <ul class="list-unstyled components mt-3">
+        <li>
+          <a href="#" :class="{'active-link': currentView === 'DASHBOARD'}" @click.prevent="navigate('DASHBOARD')">
+            <i class="bi bi-speedometer2"></i> Dashboard
+          </a>
+        </li>
+        <li>
+          <a href="#" :class="{'active-link': currentView === 'EMPRESAS'}" @click.prevent="navigate('EMPRESAS')">
+            <i class="bi bi-buildings"></i> Empresas
+          </a>
+        </li>
+        <li>
+          <a href="#" :class="{'active-link': currentView === 'EQUIPOS'}" @click.prevent="navigate('EQUIPOS')">
+            <i class="bi bi-pc-display"></i> Equipos
+          </a>
+        </li>
+        <li>
+          <a href="#" :class="{'active-link': currentView === 'UBICACIONES'}" @click.prevent="navigate('UBICACIONES')">
+            <i class="bi bi-geo-alt"></i> Ubicaciones
+          </a>
+        </li>
+        <li>
+          <a href="#" :class="{'active-link': currentView === 'RESOLUCIONES'}" @click.prevent="navigate('RESOLUCIONES')">
+            <i class="bi bi-file-earmark-medical"></i> Resoluciones
+          </a>
+        </li>
+      </ul>
+    </nav>
+    
+    <div class="overlay-mobile" :class="{ 'active': isMobileMenuOpen }" @click="isMobileMenuOpen = false"></div>
+
+    <div id="content" :style="role === 'PUBLIC' ? 'margin-left: 0;' : ''">
+      
+      <div class="top-navbar mb-4">
+        <div class="d-flex align-items-center">
+          <button type="button" class="btn btn-outline-primary d-md-none me-3" @click="isMobileMenuOpen = !isMobileMenuOpen" v-if="role !== 'PUBLIC'">
+            <i class="bi bi-list fs-4"></i>
+          </button>
+          
+          <div v-if="role === 'PUBLIC'" class="d-flex align-items-center">
+            <img :src="logoANTSV" alt="ANTSV" style="height: 40px;" class="me-2">
+            <h4 class="mb-0 fw-bold" style="color: var(--antsv-dark);">Bitácora</h4>
+          </div>
+          <h5 class="mb-0 fw-bold d-none d-md-block" style="color: var(--antsv-dark);" v-else>
+            {{ currentView === 'DASHBOARD' ? 'Panel de Control' : currentView }}
+          </h5>
+        </div>
+        
+        <div class="d-flex align-items-center">
+          <i class="bi bi-person-circle fs-5 me-2 text-muted"></i>
+          <small class="text-muted fw-bold">{{ currentUser }}</small>
+        </div>
+      </div>
+
+      <div class="container-fluid px-4 pb-5">
+        
+        <div v-if="role === 'PUBLIC'">
+          <div class="row mb-4">
+            <div class="col-md-8 mx-auto text-center">
+              <h2 style="color: var(--antsv-dark); font-weight: bold;"><i class="bi bi-shield-check me-2 text-success"></i>Verificador de Homologación</h2>
+              <p class="text-muted">Consulte la validez legal de los equipos psicofísicos del RNME.</p>
+              <div class="input-group input-group-lg mt-3 shadow-sm rounded">
+                <span class="input-group-text bg-white border-0"><i class="bi bi-search text-muted"></i></span>
+                <input type="text" class="form-control border-0" v-model="searchQuery" placeholder="Ingrese Serial del Equipo (Ej: ESP001)...">
+                <button class="btn btn-primary px-4" @click="searchPublic">Buscar</button>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-body table-responsive">
+              <table class="table table-hover align-middle">
+                <thead class="table-light">
+                  <tr><th>Registro</th><th>Marca</th><th>Ubicación Actual</th><th>Departamento</th><th>Estado</th></tr>
+                </thead>
+                <tbody>
+                  <tr v-for="ubi in db.ubicaciones" :key="ubi.id_ubicacion">
+                    <td><strong style="color: var(--antsv-dark);">{{ ubi.id_equipo }}</strong></td>
+                    <td>{{ getEquipoMarca(ubi.id_equipo) }}</td>
+                    <td><i class="bi bi-geo-alt me-1 text-muted"></i>{{ ubi.lugar_especifico }}</td>
+                    <td>{{ ubi.departamento }}</td>
+                    <td><span class="badge" style="background-color: var(--antsv-green);"><i class="bi bi-check-circle me-1"></i>Homologado y Activo</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="currentView === 'EMPRESAS'" class="card">
+          <div class="card-header d-flex justify-content-between align-items-center p-3">
+            <h5 class="mb-0"><i class="bi bi-journal-bookmark me-2"></i>Directorio de Empresas</h5>
+            <button class="btn btn-primary btn-sm" @click="openEmpresaForm()" v-if="!showEmpresaForm">
+              <i class="bi bi-plus-circle me-1"></i> Nueva Empresa
+            </button>
+          </div>
+          
+          <div class="card-body">
+            <div v-if="showEmpresaForm" class="p-4 rounded mb-4" style="background-color: rgba(36, 63, 92, 0.03); border: 1px solid rgba(36, 63, 92, 0.1);">
+              <h5 class="mb-3" style="color: var(--antsv-green); font-weight: bold;">
+                <i :class="isEditingEmp ? 'bi bi-pencil-square' : 'bi bi-building-add'" class="me-2"></i>
+                {{ isEditingEmp ? 'Editar Empresa' : 'Registrar Nueva Empresa' }}
+              </h5>
+              <div class="row g-3">
+                <div class="col-md-2">
+                  <label class="form-label fw-bold">ID / Siglas <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control text-uppercase" v-model="formEmp.id_empresa" :disabled="isEditingEmp" placeholder="Ej: TAC" maxlength="5">
+                </div>
+                <div class="col-md-5">
+                  <label class="form-label fw-bold">Razón Social <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" v-model="formEmp.razon_social">
+                </div>
+                <div class="col-md-5">
+                  <label class="form-label fw-bold">RUC <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" v-model="formEmp.ruc">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label text-muted">Representante Legal</label>
+                  <input type="text" class="form-control" v-model="formEmp.representante">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label text-muted">Email Institucional</label>
+                  <input type="email" class="form-control" v-model="formEmp.email">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label text-muted">Tipo de Entidad</label>
+                  <select class="form-select" v-model="formEmp.tipo_entidad">
+                    <option value="Prestadores de Servicios Médicos">Prestadores de Servicios Médicos</option>
+                    <option value="Fabricante de Equipos">Fabricante de Equipos</option>
+                    <option value="Importadores">Importadores</option>
+                    <option value="Estado/Público">Estado/Público</option>
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label text-muted">Dirección</label>
+                  <input type="text" class="form-control" v-model="formEmp.direccion">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label text-muted">Actividad Principal</label>
+                  <input type="text" class="form-control" v-model="formEmp.actividad_principal">
+                </div>
+              </div>
+              <div class="mt-4 text-end">
+                <button class="btn btn-outline-secondary me-2" @click="showEmpresaForm = false"><i class="bi bi-x-circle me-1"></i>Cancelar</button>
+                <button class="btn btn-primary" @click="submitEmpresa" :disabled="!isFormEmpValid">
+                  <i class="bi bi-floppy me-1"></i> Guardar Empresa
+                </button>
+              </div>
+            </div>
+
+            <div class="table-responsive" v-show="!showEmpresaForm">
+              <table class="table table-hover table-bordered align-middle">
+                <thead class="table-light text-center">
+                  <tr><th>ID</th><th>Razón Social</th><th>RUC</th><th>Email</th><th>Tipo Entidad</th><th>Acciones</th></tr>
+                </thead>
+                <tbody>
+                  <tr v-for="emp in db.empresas" :key="emp.id_empresa">
+                    <td class="text-center fw-bold" style="color: var(--antsv-dark);">{{ emp.id_empresa }}</td>
+                    <td>{{ emp.razon_social }}</td>
+                    <td class="text-center">{{ emp.ruc }}</td>
+                    <td><i class="bi bi-envelope me-1 text-muted" v-if="emp.email"></i>{{ emp.email }}</td>
+                    <td><span class="badge" style="background-color: var(--antsv-dark); color: var(--antsv-white);">{{ emp.tipo_entidad }}</span></td>
+                    <td class="text-center">
+                      <button class="btn btn-sm btn-outline-primary me-1" @click="openEmpresaForm(emp)" title="Editar">
+                        <i class="bi bi-pencil-square"></i>
+                      </button>
+                      <button class="btn btn-sm btn-outline-danger" @click="deleteEmpresa(emp.id_empresa, emp.razon_social)" title="Eliminar">
+                        <i class="bi bi-trash3"></i>
+                      </button>
+                    </td>
+                  </tr>
+                  <tr v-if="db.empresas.length === 0"><td colspan="6" class="text-center text-muted"><i class="bi bi-info-circle me-1"></i>No hay empresas.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="currentView === 'RESOLUCIONES'" class="card shadow-sm">
+          
+          <div class="card-header p-0" style="background-color: var(--antsv-dark); border-radius: 10px 10px 0 0;">
+            <ul class="nav nav-tabs px-3 pt-3" style="border-bottom: none;">
+              <li class="nav-item">
+                <a class="nav-link rounded-top" :class="{active: activeResTab === 'LISTADO', 'text-dark': activeResTab === 'LISTADO', 'text-white': activeResTab !== 'LISTADO'}" href="#" @click.prevent="activeResTab = 'LISTADO'" style="border: none; border-bottom: 3px solid transparent;" :style="activeResTab === 'LISTADO' ? 'background-color: var(--antsv-white); font-weight: bold;' : ''">
+                  <i class="bi bi-list-ul me-1"></i> Listado de Resoluciones
+                </a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link rounded-top" :class="{active: activeResTab === 'NUEVA', 'text-dark': activeResTab === 'NUEVA', 'text-white': activeResTab !== 'NUEVA'}" href="#" @click.prevent="activeResTab = 'NUEVA'" style="border: none; border-bottom: 3px solid transparent;" :style="activeResTab === 'NUEVA' ? 'background-color: var(--antsv-white); font-weight: bold;' : ''">
+                  <i class="bi bi-cloud-arrow-up me-1"></i> Subir Nueva
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          <div class="card-body">
+            
+            <div v-show="activeResTab === 'LISTADO'">
+              
+              <div class="row g-2 mb-3 p-3 rounded" style="background-color: var(--antsv-light); border: 1px solid rgba(36, 63, 92, 0.1);">
+                <div class="col-md-4">
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+                    <input type="text" class="form-control" v-model="searchRes" placeholder="Buscar Resolución o Equipo...">
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <select class="form-select form-select-sm" v-model="filterTipoActoRes">
+                    <option value="">📄 Todos los Tipos de Acto</option>
+                    <option value="1-Homologación">1-Homologación Inicial</option>
+                    <option value="2-Renovación">2-Renovación</option>
+                    <option value="3-Cambio Ubicación">3-Cambio Ubicación</option>
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <select class="form-select form-select-sm" v-model="filterEstadoRes">
+                    <option value="">🟢/🔴 Todos los Estados</option>
+                    <option v-for="est in estadosResolucionList" :key="est.id_catalogo" :value="est.valor">{{ est.valor }}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="table-responsive">
+                <table class="table table-hover align-middle border shadow-sm">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Nro. Resolución</th>
+                      <th>Equipo Afectado</th>
+                      <th>Tipo de Acto</th>
+                      <th>Periodo Vigencia</th>
+                      <th>Estado</th>
+                      <th class="text-center">Documento</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="res in filteredResoluciones" :key="res.id_resolucion">
+                      <td class="fw-bold" style="color: var(--antsv-dark);">{{ res.id_resolucion }}</td>
+                      <td>
+                        <div class="fw-bold"><i class="bi bi-cpu me-1 text-muted"></i>{{ res.id_equipo_vinculado }}</div>
+                        <div class="small text-muted mb-1">{{ getEquipoMarca(res.id_equipo_vinculado) }}</div>
+                        <div class="small" style="color: var(--antsv-green); font-size: 0.75rem;">
+                          <i class="bi bi-geo-alt-fill me-1"></i>{{ getEquipoUbicacion(res.id_equipo_vinculado) }}
+                        </div>
+                      </td>
+                      <td>
+                        <span class="badge border" :class="{
+                          'bg-primary bg-opacity-10 text-primary border-primary': res.tipo_acto === '1-Homologación',
+                          'bg-success bg-opacity-10 text-success border-success': res.tipo_acto === '2-Renovación',
+                          'bg-warning bg-opacity-10 text-dark border-warning': res.tipo_acto === '3-Cambio Ubicación'
+                        }">
+                          <i class="me-1" :class="{
+                            'bi-award-fill': res.tipo_acto === '1-Homologación',
+                            'bi-arrow-repeat': res.tipo_acto === '2-Renovación',
+                            'bi-truck': res.tipo_acto === '3-Cambio Ubicación'
+                          }"></i>
+                          {{ res.tipo_acto }}
+                        </span>
+                      </td>
+                      <td>
+                        <div class="small">
+                          <div><span class="text-muted fw-bold">Emisión:</span> {{ res.fecha_emision }}</div>
+                          <div><span class="text-muted fw-bold">Vencimiento:</span> <span :class="{'text-danger fw-bold': res?.estado === 'No Vigente'}">{{ res.vencimiento }}</span></div>
+                        </div>
+                      </td>
+                      <td>
+                        <span class="badge" :class="res?.estado === 'Vigente' ? 'bg-success' : 'bg-danger'">
+                          <i :class="res?.estado === 'Vigente' ? 'bi bi-check-circle' : 'bi bi-x-circle'" class="me-1"></i>
+                          {{ res?.estado || 'Desconocido' }}
+                        </span>
+                      </td>
+                      <td class="text-center">
+                        <a v-if="res.url_drive" :href="res.url_drive" target="_blank" class="btn btn-sm btn-outline-danger" title="Ver PDF">
+                          <i class="bi bi-file-earmark-pdf-fill"></i> PDF
+                        </a>
+                        <span v-else class="text-muted small"><i class="bi bi-dash"></i></span>
+                      </td>
+                    </tr>
+                    <tr v-if="filteredResoluciones.length === 0">
+                      <td colspan="6" class="text-center p-5 text-muted">
+                        <i class="bi bi-search display-6 d-block mb-3 opacity-50"></i>
+                        No se encontraron resoluciones con los filtros actuales.
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div v-show="activeResTab === 'NUEVA'" class="p-4 rounded shadow-sm" style="background-color: rgba(36, 63, 92, 0.03); border: 1px solid var(--antsv-light);">
+              <h5 class="mb-4 fw-bold" style="color: var(--antsv-green); border-bottom: 2px solid var(--antsv-green); display: inline-block;">
+                <i class="bi bi-file-earmark-plus me-1"></i> Registrar Documento Legal
+              </h5>
+              <div class="row">
+                <div class="col-md-6">
+                  <label class="form-label fw-bold" style="color: var(--antsv-dark);">Número de Resolución</label>
+                  <div class="input-group mb-3 shadow-sm">
+                    <span class="input-group-text" style="background-color: var(--antsv-light); border:none;"><i class="bi bi-hash text-muted me-1"></i>ANTSV N°</span>
+                    <input type="number" class="form-control" v-model="formRes.numero" placeholder="Ej: 639" min="1">
+                    <span class="input-group-text" style="background-color: var(--antsv-light); border:none;">_</span>
+                    <input type="number" class="form-control" v-model="formRes.anio" placeholder="Ej: 2025" min="2020">
+                  </div>
+                  
+                  <div class="mb-3">
+                    <label class="form-label fw-bold" style="color: var(--antsv-dark);"><i class="bi bi-pc-display me-1 text-muted"></i>Equipos Afectados</label>
+                    <div class="border rounded p-2 shadow-sm" style="max-height: 150px; overflow-y: auto; background-color: var(--antsv-white);">
+                      <div class="form-check" v-for="eq in db.equipos" :key="eq.id_registro">
+                        <input class="form-check-input" type="checkbox" :value="eq.id_registro" v-model="formRes.id_equipo" :id="'chk_'+eq.id_registro">
+                          <label class="form-check-label w-100" :for="'chk_'+eq.id_registro" style="cursor: pointer;">
+                            <div class="d-flex justify-content-between align-items-center pe-2">
+                              <span><strong style="color: var(--antsv-dark);">{{ eq.id_registro }}</strong> - {{ eq.marca }}</span>
+                              <small class="text-muted" style="font-size: 0.75rem;">
+                                <i class="bi bi-geo-alt-fill text-danger me-1"></i>{{ getEquipoUbicacion(eq.id_registro) }}
+                              </small>
+                            </div>
+                          </label>
+                      </div>
+                      <div v-if="db.equipos.length === 0" class="text-muted small">No hay equipos registrados.</div>
+                    </div>
+                    <small class="text-muted"><i class="bi bi-info-circle me-1"></i>Puede marcar 1 o más equipos del lote.</small>
+                  </div>
+                  
+                  <div class="mb-3">
+                    <label class="form-label fw-bold" style="color: var(--antsv-dark);"><i class="bi bi-bookmark-star me-1 text-muted"></i>Tipo de Acto</label>
+                    <select class="form-select shadow-sm" v-model="formRes.tipo_acto">
+                      <option value="1-Homologación">1-Homologación Inicial</option>
+                      <option value="2-Renovación">2-Renovación</option>
+                      <option value="3-Cambio Ubicación">3-Cambio Ubicación</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <div class="col-md-6">
+                  <label class="form-label fw-bold" style="color: var(--antsv-dark);">Documento Escaneado (PDF)</label>
+                  <div class="drag-drop-zone shadow-sm" @click="triggerFileInput">
+                    <div v-if="!formRes.fileName">
+                      <i class="bi bi-cloud-arrow-up display-4"></i>
+                      <p class="mt-2 mb-0">Arrastre el PDF aquí o haga clic para seleccionar</p>
+                      <small class="text-muted">Máximo {{ config.MAX_FILE_SIZE_MB || 5 }} MB</small>
+                    </div>
+                    <div v-else style="color: var(--antsv-green);">
+                      <i class="bi bi-file-earmark-pdf-fill display-4"></i>
+                      <p class="mt-2 mb-0 fw-bold">✅ {{ formRes.fileName }} preparado.</p>
+                    </div>
+                  </div>
+                  <input type="file" id="pdfUploader" accept="application/pdf" style="display: none;" @change="handleFileUpload">
+                  
+                  <div class="d-grid mt-4">
+                    <button class="btn btn-primary btn-lg shadow" @click="submitResolucion" :disabled="!isFormResValid">
+                      <i class="bi bi-cloud-upload me-2"></i>Subir y Registrar Resolución
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div v-if="currentView === 'EQUIPOS'" class="card">
+          <div class="card-header d-flex justify-content-between align-items-center p-3">
+            <h5 class="mb-0"><i class="bi bi-pc-display me-2"></i>Gestión de Equipos Psicofísicos</h5>
+            <button class="btn btn-primary btn-sm" @click="openEquipoForm()" v-if="!showEquipoForm">
+              <i class="bi bi-plus-circle me-1"></i> Registrar Equipo
+            </button>
+          </div>
+          
+          <div class="card-body">
+            <div v-if="showEquipoForm" class="card shadow-sm border-0 mb-4">
+              <div class="card-header bg-dark text-white py-3">
+                <h5 class="mb-0 fw-bold">
+                  <i :class="isEditingEq ? 'bi bi-pencil-square' : 'bi bi-plus-circle'" class="me-2"></i>
+                  {{ isEditingEq ? 'Editar Equipo: ' + formEq.id_registro : 'Registrar Nuevo Equipo' }}
+                </h5>
+              </div>
+              <div class="card-body p-4">
+                <form @submit.prevent="submitEquipo">
+                  <div class="row g-4">
+                    
+                    <div class="col-md-6">
+                      <h6 class="fw-bold text-muted mb-3 pb-2 border-bottom"><i class="bi bi-card-heading me-1"></i> Identificación y Propiedad</h6>
+                      
+                      <div class="mb-3" v-if="isEditingEq">
+                        <label class="form-label fw-bold"><i class="bi bi-upc-scan me-1 text-primary"></i>ID Registro</label>
+                        <input type="text" class="form-control form-control-lg fw-bold text-uppercase font-monospace bg-light" v-model="formEq.id_registro" disabled>
+                      </div>
+                      <div class="alert alert-info py-2" v-else>
+                        <i class="bi bi-info-circle-fill me-2"></i>El ID de Registro se generará automáticamente al guardar.
+                      </div>
+                      
+                      <div class="mb-3">
+                        <label class="form-label fw-bold"><i class="bi bi-building me-1 text-primary"></i>Empresa Propietaria <span class="text-danger">*</span></label>
+                        <select class="form-select form-select-lg" v-model="formEq.id_empresa">
+                          <option value="" disabled>Seleccione una Empresa...</option>
+                          <option v-for="emp in db.empresas" :key="emp.id_empresa" :value="emp.id_empresa">{{ emp.razon_social }}</option>
+                        </select>
+                      </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                      <h6 class="fw-bold text-muted mb-3 pb-2 border-bottom"><i class="bi bi-tools me-1"></i> Detalles Técnicos y Estado</h6>
+                      
+                      <div class="mb-3">
+                        <label class="form-label fw-bold"><i class="bi bi-tag me-1 text-primary"></i>Marca del Equipo <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" v-model="formEq.marca" placeholder="Ej: Norklan, Smartest...">
+                      </div>
+
+                      <div class="row g-2 mb-3">
+                        <div class="col-6">
+                          <label class="form-label fw-bold small"><i class="bi bi-barcode me-1"></i>S. Psicométrico <span class="text-danger">*</span></label>
+                          <input type="text" class="form-control form-control-sm" v-model="formEq.serial_psicometrico" placeholder="Ej: PYV...">
+                        </div>
+                        <div class="col-6">
+                          <label class="form-label fw-bold small"><i class="bi bi-barcode me-1"></i>S. Sensométrico <span class="text-danger">*</span></label>
+                          <input type="text" class="form-control form-control-sm" v-model="formEq.serial_sensometrico" placeholder="Ej: PYG...">
+                        </div>
+                      </div>
+
+                      <div class="mb-3">
+                        <label class="form-label fw-bold d-flex justify-content-between align-items-center">
+                          <span><i class="bi bi-stoplights me-1 text-primary"></i>Estado</span>
+                          <span v-if="formEq.estado_homologacion" class="badge rounded-pill" :class="{'bg-success': formEq.estado_homologacion === 'Homologado', 'bg-danger': formEq.estado_homologacion === 'No Homologado'}">
+                            {{ formEq.estado_homologacion }}
+                          </span>
+                          <span v-else class="badge rounded-pill bg-secondary"><i class="bi bi-hourglass-split me-1"></i>Sin Homologar</span>
+                        </label>
+                        <select class="form-select bg-light" v-model="formEq.estado_homologacion" disabled>
+                          <option value="">En Blanco / Pendiente</option>
+                          <option v-for="est in estadosEquipoList" :key="est.id_catalogo" :value="est.valor">{{ est.valor }}</option>
+                        </select>
+                        <div class="form-text small text-muted"><i class="bi bi-shield-lock me-1"></i>Este estado se automatiza al subir una Resolución.</div>
+                      </div>
+                    </div>
+                    
+                    <div class="col-12">
+                      <label class="form-label fw-bold"><i class="bi bi-chat-left-text me-1 text-primary"></i>Observaciones / Notas Adicionales</label>
+                      <textarea class="form-control" v-model="formEq.descripcion" rows="3" placeholder="Ingrese cualquier nota relevante sobre el equipo, su estado o historial..."></textarea>
+                    </div>
+                    
+                  </div>
+                  
+                  <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
+                    <button type="button" class="btn btn-outline-secondary px-4" @click="showEquipoForm = false">
+                      <i class="bi bi-x-lg me-2"></i>Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-success px-4 fw-bold" :disabled="!isFormEqValid">
+                      <i class="bi bi-check-lg me-2"></i>{{ isEditingEq ? 'Actualizar Equipo' : 'Guardar Nuevo Equipo' }}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            <div v-show="!showEquipoForm">
+              
+              <div class="row g-2 mb-3 p-3 rounded" style="background-color: var(--antsv-light); border: 1px solid rgba(36, 63, 92, 0.1);">
+                <div class="col-md-4">
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+                    <input type="text" class="form-control" v-model="searchEq" placeholder="Buscar ID, Marca o Seriales...">
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <select class="form-select form-select-sm" v-model="filterEmpresaEq">
+                    <option value="">🏢 Todas las Empresas</option>
+                    <option v-for="emp in db.empresas" :key="emp.id_empresa" :value="emp.id_empresa">{{ emp.razon_social }}</option>
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <select class="form-select form-select-sm" v-model="filterEstadoEq">
+                    <option value="">🟢/🔴 Todos los Estados</option>
+                    <option v-for="est in estadosEquipoList" :key="est.id_catalogo" :value="est.valor">{{ est.valor }}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="table-responsive">
+                <table class="table table-hover table-bordered align-middle shadow-sm">
+                  <thead class="table-light text-center">
+                    <tr>
+                      <th>ID Registro</th>
+                      <th>Empresa</th>
+                      <th>Marca</th>
+                      <th>Componentes</th>
+                      <th>Estado</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="eq in filteredEquipos" :key="eq.id_registro">
+                      <td class="text-center fw-bold" style="color: var(--antsv-dark);">{{ eq.id_registro }}</td>
+                      <td>{{ getEmpresaNombre(eq.id_empresa) }}</td>
+                      <td class="text-center">{{ eq.marca }}</td>
+                      <td class="align-middle text-nowrap">
+                        <div class="small text-start">
+                          <div class="mb-1">
+                            <span class="fw-bold" style="color: var(--antsv-dark);">Nro. Serie Psicométrico: </span> 
+                            <span class="text-muted">{{ eq['serial_psicométrico'] || eq.serial_psicometrico || 'N/A' }}</span>
+                          </div>
+                          <div>
+                            <span class="fw-bold" style="color: var(--antsv-dark);">Nro. Serie Sensométrico: </span> 
+                            <span class="text-muted">{{ eq['serial_sensométrico'] || eq.serial_sensometrico || 'N/A' }}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td class="text-center">
+                        <span class="badge" :class="{'bg-success': eq.estado_homologacion === 'Homologado', 'bg-danger': eq.estado_homologacion === 'No Homologado'}">
+                          <i class="me-1" :class="{'bi-check-circle': eq.estado_homologacion === 'Homologado', 'bi-x-circle': eq.estado_homologacion === 'No Homologado'}"></i>
+                          {{ eq.estado_homologacion }}
+                        </span>
+                      </td>
+                      <td class="text-center">
+                        <button class="btn btn-sm btn-outline-primary me-1" @click="openEquipoForm(eq)" title="Editar">
+                          <i class="bi bi-pencil-square"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" @click="deleteEquipo(eq.id_registro)" title="Eliminar">
+                          <i class="bi bi-trash3"></i>
+                        </button>
+                      </td>
+                    </tr>
+                    <tr v-if="filteredEquipos.length === 0">
+                      <td colspan="6" class="text-center p-5 text-muted">
+                        <i class="bi bi-search display-6 d-block mb-3 opacity-50"></i>
+                        No se encontraron equipos con los filtros actuales.
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="currentView === 'UBICACIONES'" class="card shadow-sm">
+          <div class="card-header d-flex justify-content-between align-items-center p-3">
+            <h5 class="mb-0"><i class="bi bi-pin-map me-2"></i>Historial de Ubicaciones</h5>
+            <button class="btn btn-primary btn-sm" @click="openUbiForm()" v-if="!showUbiForm">
+              <i class="bi bi-geo-fill me-1"></i> Asignar Nueva Ubicación
+            </button>
+          </div>
+          
+          <div class="card-body">
+            <div v-if="showUbiForm" class="p-4 rounded mb-4 shadow-sm" style="background-color: rgba(36, 63, 92, 0.03); border: 1px solid var(--antsv-light);">
+              <h5 class="mb-4 fw-bold" style="color: var(--antsv-green); border-bottom: 2px solid var(--antsv-green); display: inline-block;">
+                Registrar Movimiento de Equipo
+              </h5>
+              <div class="row g-3">
+                <div class="col-md-4">
+                  <label class="form-label fw-bold">Equipo a Ubicar <span class="text-danger">*</span></label>
+                  <select class="form-select" v-model="formUbi.id_equipo">
+                    <option v-for="eq in db.equipos" :value="eq.id_registro">{{ eq.id_registro }} - {{ eq.marca }}</option>
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label fw-bold">Departamento <span class="text-danger">*</span></label>
+                  <select class="form-select" v-model="formUbi.departamento">
+                    <option value="">Seleccione...</option>
+                    <option v-for="d in deptosList" :value="d.valor">{{ d.valor }}</option>
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label fw-bold">Distrito <span class="text-danger">*</span></label>
+                  <select class="form-select" v-model="formUbi.distrito" :disabled="!formUbi.departamento">
+                    <option value="">Seleccione Distrito...</option>
+                    <option v-for="dis in distritosFiltrados" :value="dis.valor">{{ dis.valor }}</option>
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label fw-bold">Nivel de Competencia</label>
+                  <select class="form-select" v-model="formUbi.competencia">
+                    <option value="Municipal">Municipal</option>
+                    <option value="Distrital">Distrital</option>
+                    <option value="Departamental">Departamental</option>
+                    <option value="Nacional">Nacional</option>
+                  </select>
+                </div>
+                <div class="col-md-8">
+                  <label class="form-label fw-bold">Lugar Específico / Dirección <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" v-model="formUbi.lugar_especifico" placeholder="Ej: Municipalidad de... o Clínica...">
+                </div>
+              </div>
+              <div class="mt-4 text-end">
+                <button class="btn btn-outline-secondary me-2" @click="showUbiForm = false">Cancelar</button>
+                <button class="btn btn-primary px-4" @click="submitUbi" :disabled="!isFormUbiValid">
+                  <i class="bi bi-save me-1"></i> Confirmar Ubicación Activa
+                </button>
+              </div>
+            </div>
+
+            <div v-show="!showUbiForm">
+              
+              <div class="row g-2 mb-3 p-3 rounded" style="background-color: var(--antsv-light); border: 1px solid rgba(36, 63, 92, 0.1);">
+                <div class="col-md-3">
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+                    <input type="text" class="form-control" v-model="searchUbi" placeholder="Buscar serial, marca, ciudad...">
+                  </div>
+                </div>
+                <div class="col-md-3">
+                  <select class="form-select form-select-sm" v-model="filterEmpresaUbi">
+                    <option value="">🏢 Todas las Empresas</option>
+                    <option v-for="emp in db.empresas" :key="emp.id_empresa" :value="emp.id_empresa">{{ emp.razon_social }}</option>
+                  </select>
+                </div>
+                <div class="col-md-3">
+                  <select class="form-select form-select-sm" v-model="filterDepartamentoUbi">
+                    <option value="">📍 Todos los Departamentos</option>
+                    <option v-for="d in deptosList" :key="d.valor" :value="d.valor">{{ d.valor }}</option>
+                  </select>
+                </div>
+                <div class="col-md-3">
+                  <select class="form-select form-select-sm" v-model="filterEstadoUbi">
+                    <option value="">🟢/⚪ Todos los Estados (Historial)</option>
+                    <option value="Activo">🟢 Solo Ubicaciones Activas</option>
+                    <option value="Histórico">⚪ Solo Histórico Anterior</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="table-responsive">
+                <table class="table table-hover align-middle border shadow-sm">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Equipo / Marca</th>
+                      <th>Ubicación Geográfica</th>
+                      <th>Nivel / Dirección</th>
+                      <th>Estado</th>
+                      <th v-if="role === 'DIRECTOR'" class="text-center">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="u in filteredUbicaciones" :key="u.id_ubicacion" :class="{'table-info': u.estado_actual === 'Activo'}">
+                      <td>
+                        <div class="fw-bold" style="color: var(--antsv-dark); font-size: 1.1rem;">
+                          <i class="bi bi-cpu me-1"></i> {{ u.id_equipo }}
+                        </div>
+                        <div class="mt-1" style="font-size: 0.85rem;">
+                          <div class="mb-1">
+                            <span class="fw-bold text-uppercase" style="color: var(--antsv-dark); font-size: 0.75rem;">Marca:</span> 
+                            <span class="text-muted">{{ getEquipoMarca(u.id_equipo) }}</span>
+                          </div>
+                          <div>
+                            <span class="fw-bold text-uppercase" style="color: var(--antsv-dark); font-size: 0.75rem;">Propietario:</span> 
+                            <span class="text-muted">{{ getEquipoEmpresa(u.id_equipo) }}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <div class="d-flex align-items-center">
+                          <i class="bi bi-geo-alt-fill text-danger me-2 fs-5"></i>
+                          <div>
+                            <div class="fw-bold">{{ u.departamento }}</div>
+                            <div class="small text-muted">{{ u.distrito }}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <div class="badge mb-1" style="background-color: transparent; border: 1px solid var(--antsv-dark); color: var(--antsv-dark);">
+                          {{ u.competencia }}
+                        </div>
+                        <div class="small">{{ u.lugar_especifico }}</div>
+                      </td>
+                      <td>
+                        <span class="badge" :class="u.estado_actual === 'Activo' ? 'bg-success' : 'bg-secondary'">
+                          <i :class="u.estado_actual === 'Activo' ? 'bi bi-check-circle' : 'bi bi-clock-history'" class="me-1"></i>
+                          {{ u.estado_actual }}
+                        </span>
+                      </td>
+                      <td v-if="role === 'DIRECTOR'" class="text-center">
+                        <button class="btn btn-sm btn-outline-secondary" @click="viewUbiDetails(u)" title="Ver Detalles">
+                          <i class="bi bi-eye"></i>
+                        </button>
+                      </td>
+                    </tr>
+                    <tr v-if="filteredUbicaciones.length === 0">
+                      <td colspan="5" class="text-center p-5 text-muted">
+                        <i class="bi bi-search display-6 d-block mb-3 opacity-50"></i>
+                        No se encontraron ubicaciones con los filtros actuales.
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const { createApp, ref, computed, onMounted } = Vue;
+
+  createApp({
+    setup() {
+      // 1. ESTADO GLOBAL
+      const logoANTSV = ref("");
+      const isLoading = ref(true);
+      const loadingMessage = ref("Inicializando Entorno Seguro...");
+      const role = ref("");
+      const currentUser = ref("");
+      const db = ref({ equipos: [], ubicaciones: [], resoluciones: [], empresas: [] });
+      const config = ref({});
+      const currentView = ref("DASHBOARD");
+      const searchQuery = ref("");
+      
+      // ESTADO UI (Navegación Móvil)
+      const isMobileMenuOpen = ref(false);
+
+      const navigate = (view) => {
+        currentView.value = view;
+        isMobileMenuOpen.value = false;
+      };
+
+      // 2. ESTADO FORMULARIO RESOLUCIÓN
+      const formRes = ref({
+        numero: "", anio: new Date().getFullYear(), id_equipo: [], tipo_acto: "1-Homologación", fileBase64: null, fileName: "", mimeType: ""
+      });
+
+      const isFormResValid = computed(() => formRes.value.numero && formRes.value.anio && formRes.value.id_equipo.length > 0 && formRes.value.fileBase64);
+      const resolucionFormateada = computed(() => `ANTSV N° ${formRes.value.numero}_${formRes.value.anio}`);
+
+      // 3. ESTADO FORMULARIO EMPRESA
+      const showEmpresaForm = ref(false);
+      const isEditingEmp = ref(false);
+      const formEmp = ref({
+        id_empresa: "", razon_social: "", ruc: "", representante: "",
+        email: "", direccion: "", tipo_entidad: "Fabricante de Equipos", actividad_principal: "", isUpdate: false
+      });
+      const isFormEmpValid = computed(() => formEmp.value.id_empresa && formEmp.value.razon_social && formEmp.value.ruc);
+
+      // =====================================
+      // MÉTODOS DE DATOS (Backend Communication)
+      // =====================================
+      const loadInitialData = () => {
+        google.script.run
+          .withSuccessHandler((responseStr) => {
+            if (!responseStr) {
+              Swal.fire('Error del Servidor', 'Google Apps Script no devolvió datos.', 'error');
+              isLoading.value = false; return;
+            }
+            const response = JSON.parse(responseStr);
+            role.value = response.role;
+            currentUser.value = response.user;
+            db.value = response.data;
+            config.value = response.data.configuracion || {};
+            logoANTSV.value = response.data.logoBase64;
+            isLoading.value = false;
+          })
+          .withFailureHandler((error) => {
+            Swal.fire('Error Critico', 'No se pudo cargar la base de datos: ' + error.message, 'error');
+            isLoading.value = false;
+          })
+          .getInitialPayload();
+      };
+
+      // Función para obtener la marca desde la tabla de equipos
+      const getEquipoMarca = (id_equipo) => {
+        const eq = db.value.equipos.find(e => e.id_registro === id_equipo);
+        return eq ? eq.marca : 'No identificado';
+      };
+
+      // Función para validar la vigencia de la resolución actual del equipo en esa ubicación
+      const getEstadoVigencia = (id_equipo) => {
+        const res = db.value.resoluciones
+          .filter(r => r.id_equipo_vinculado === id_equipo)
+          .sort((a, b) => new Date(b.vencimiento) - new Date(a.vencimiento))[0];
+          
+        if (!res) return { texto: 'Sin Resolución', clase: 'bg-warning' };
+        
+        const hoy = new Date();
+        const venc = new Date(res.vencimiento);
+        
+        return hoy > venc 
+          ? { texto: 'Vencido', clase: 'bg-danger' } 
+          : { texto: 'Vigente', clase: 'bg-success' };
+      };
+
+      // =====================================
+      // MÉTODOS EMPRESAS
+      // =====================================
+      const openEmpresaForm = (empresa = null) => {
+        if (empresa) {
+          isEditingEmp.value = true;
+          formEmp.value = { ...empresa, isUpdate: true };
+        } else {
+          isEditingEmp.value = false;
+          formEmp.value = { id_empresa: "", razon_social: "", ruc: "", representante: "", email: "", direccion: "", tipo_entidad: "Fabricante de Equipos", actividad_principal: "", isUpdate: false };
+        }
+        showEmpresaForm.value = true;
+      };
+
+      const submitEmpresa = () => {
+        isLoading.value = true;
+        loadingMessage.value = "Guardando información de la empresa...";
+        google.script.run
+          .withSuccessHandler(() => {
+            Swal.fire({ title: 'Éxito', text: 'Empresa guardada correctamente', icon: 'success', confirmButtonColor: '#84B74C' });
+            showEmpresaForm.value = false;
+            loadInitialData(); 
+          })
+          .withFailureHandler((err) => {
+            isLoading.value = false;
+            Swal.fire('Error', err.message, 'error');
+          })
+          .saveEmpresaTransaction(formEmp.value);
+      };
+
+      const deleteEmpresa = (id_empresa, razon_social) => {
+        Swal.fire({
+          title: '¿Eliminar Empresa?',
+          html: `Está a punto de borrar a <b>${razon_social}</b>.<br>Esta acción verificará si existen equipos vinculados.`,
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#d33',
+          confirmButtonText: 'Sí, Eliminar',
+          cancelButtonText: 'Cancelar'
+        }).then((result) => {
+          if (result.isConfirmed) {
+            isLoading.value = true;
+            loadingMessage.value = "Validando dependencias y eliminando...";
+            google.script.run
+              .withSuccessHandler(() => {
+                Swal.fire({ title: 'Eliminada', text: 'La empresa ha sido dada de baja.', icon: 'success', confirmButtonColor: '#84B74C' });
+                loadInitialData(); 
+              })
+              .withFailureHandler((err) => {
+                isLoading.value = false;
+                Swal.fire('Acción Bloqueada', err.message, 'error');
+              })
+              .deleteEmpresaTransaction(id_empresa);
+          }
+        });
+      };
+
+      // =====================================
+      // MÉTODOS RESOLUCIONES Y ARCHIVOS
+      // =====================================
+      const triggerFileInput = () => document.getElementById('pdfUploader').click();
+      
+      const handleFileUpload = (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        const maxSize = (config.value.MAX_FILE_SIZE_MB || 5) * 1024 * 1024;
+        if (file.size > maxSize) {
+          Swal.fire('Archivo muy pesado', `El límite es de ${config.value.MAX_FILE_SIZE_MB}MB`, 'warning');
+          return;
+        }
+        formRes.value.fileName = file.name;
+        formRes.value.mimeType = file.type;
+        const reader = new FileReader();
+        reader.onload = (e) => formRes.value.fileBase64 = e.target.result.split(',')[1]; 
+        reader.readAsDataURL(file);
+      };
+
+      const submitResolucion = () => {
+        Swal.fire({
+          title: '¿Confirmar Registro?',
+          text: `Se registrará la resolución ${resolucionFormateada.value} afectando a ${formRes.value.id_equipo.length} equipo(s).`,
+          icon: 'question',
+          showCancelButton: true,
+          confirmButtonColor: '#84B74C',
+          confirmButtonText: 'Sí, Registrar',
+          cancelButtonText: 'Cancelar'
+        }).then((result) => {
+          if (result.isConfirmed) {
+            isLoading.value = true;
+            loadingMessage.value = "Subiendo archivo a Google Drive y actualizando equipos...";
+            
+            // Usamos .join('-') para que si eligen varios equipos no queden comas en el nombre del archivo PDF
+            const equiposString = formRes.value.id_equipo.join('-');
+            const payloadFile = { 
+              base64: formRes.value.fileBase64, 
+              nombre: `Res_${formRes.value.numero}_${formRes.value.anio}_${equiposString}.pdf`, 
+              mimeType: formRes.value.mimeType 
+            };
+            const payloadData = { 
+              id_resolucion: resolucionFormateada.value, 
+              id_equipo: formRes.value.id_equipo, 
+              tipo_acto: formRes.value.tipo_acto 
+            };
+
+            google.script.run
+              .withSuccessHandler((res) => {
+                isLoading.value = false;
+                Swal.fire({ title: 'Éxito', text: 'Resolución guardada y equipos actualizados a Homologados.', icon: 'success', confirmButtonColor: '#84B74C' });
+                
+                // Limpiar el formulario
+                formRes.value.fileBase64 = null; 
+                formRes.value.fileName = ""; 
+                formRes.value.numero = "";
+                formRes.value.id_equipo = []; // Vaciar la lista de equipos seleccionados
+                
+                // Volver automáticamente a la pestaña del listado
+                activeResTab.value = "LISTADO";
+                
+                // Recargar datos para ver los cambios reflejados en las tablas
+                loadInitialData(); 
+              })
+              .withFailureHandler((err) => { 
+                isLoading.value = false; 
+                Swal.fire('Error de Guardado', err.message, 'error'); 
+              })
+              .processResolutionUpload(payloadFile, payloadData);
+          }
+        });
+      };
+
+      // =====================================
+      // 4. ESTADO FORMULARIO EQUIPOS (Revisa que esto esté en tu código)
+      // =====================================
+      const showEquipoForm = ref(false);
+      const isEditingEq = ref(false);
+      const formEq = ref({
+        id_registro: "", id_empresa: "", descripcion: "", marca: "", 
+        serial_psicometrico: "", serial_sensometrico: "", estado_homologacion: "Vigente", isUpdate: false
+      });
+      
+      const isFormEqValid = computed(() => {
+        const isValid = formEq.value.id_empresa && formEq.value.marca && formEq.value.serial_psicometrico && formEq.value.serial_sensometrico;
+        if (isEditingEq.value) return isValid && formEq.value.id_registro;
+        return isValid;
+      });
+
+      const getEmpresaNombre = (id_empresa) => {
+        const emp = db.value.empresas.find(e => e.id_empresa === id_empresa);
+        return emp ? emp.razon_social : id_empresa;
+      };
+
+      const openEquipoForm = (equipo = null) => {
+        if (equipo) {
+          isEditingEq.value = true;
+          formEq.value = { 
+            id_registro: equipo.id_registro, id_empresa: equipo.id_empresa, descripcion: equipo.descripcion, marca: equipo.marca,
+            serial_psicometrico: equipo['serial_psicométrico'] || equipo.serial_psicometrico,
+            serial_sensometrico: equipo['serial_sensométrico'] || equipo.serial_sensometrico,
+            estado_homologacion: equipo.estado_homologacion || "",
+            isUpdate: true 
+          };
+        } else {
+          isEditingEq.value = false;
+          // Dejamos registro y estado en blanco
+          formEq.value = { id_registro: "", id_empresa: "", descripcion: "", marca: "", serial_psicometrico: "", serial_sensometrico: "", estado_homologacion: "", isUpdate: false };
+        }
+        showEquipoForm.value = true;
+      };
+
+      const submitEquipo = () => {
+        isLoading.value = true;
+        loadingMessage.value = "Guardando información del Equipo...";
+        google.script.run
+          .withSuccessHandler(() => {
+            Swal.fire({ title: 'Éxito', text: 'Equipo registrado correctamente', icon: 'success', confirmButtonColor: '#84B74C' });
+            showEquipoForm.value = false;
+            loadInitialData(); 
+          })
+          .withFailureHandler((err) => {
+            isLoading.value = false;
+            Swal.fire('Error', err.message, 'error');
+          })
+          .saveEquipoTransaction(formEq.value);
+      };
+
+      const deleteEquipo = (id_registro) => {
+        Swal.fire({
+          title: '¿Eliminar Equipo?',
+          html: `Está a punto de intentar borrar el registro <b>${id_registro}</b>.<br>Si el equipo tiene resoluciones o historial, la base de datos bloqueará esta acción.`,
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#d33',
+          confirmButtonText: 'Sí, Intentar Eliminar',
+          cancelButtonText: 'Cancelar'
+        }).then((result) => {
+          if (result.isConfirmed) {
+            isLoading.value = true;
+            loadingMessage.value = "Validando historial del equipo...";
+            google.script.run
+              .withSuccessHandler(() => {
+                Swal.fire({ title: 'Eliminado', text: 'El equipo ha sido borrado.', icon: 'success', confirmButtonColor: '#84B74C' });
+                loadInitialData(); 
+              })
+              .withFailureHandler((err) => {
+                isLoading.value = false;
+                Swal.fire('Acción Bloqueada (Integridad)', err.message, 'error');
+              })
+              .deleteEquipoTransaction(id_registro);
+          }
+        });
+      };
+
+      // 5. ESTADO UBICACIONES
+      const showUbiForm = ref(false);
+      const formUbi = ref({
+        id_equipo: "", departamento: "", distrito: "", competencia: "Distrital", lugar_especifico: "", estado_actual: "Activo"
+      });
+
+      // Selects en cascada: Extraemos el [PY-XX] para filtrar
+      const deptosList = computed(() => {
+        return db.value.catalogos ? db.value.catalogos.filter(c => c.categoria === 'DEPARTAMENTO') : [];
+      });
+
+      const distritosFiltrados = computed(() => {
+        if (!formUbi.value.departamento) return [];
+        const match = formUbi.value.departamento.match(/\[PY-\d+\]/);
+        const padreId = match ? match[0] : "";
+        return db.value.catalogos.filter(c => c.categoria === 'DISTRITO' && c.padre_id.includes(padreId));
+      });
+
+      const isFormUbiValid = computed(() => {
+        return formUbi.value.id_equipo && formUbi.value.departamento && formUbi.value.distrito && formUbi.value.lugar_especifico;
+      });
+
+      const openUbiForm = () => {
+        formUbi.value = { id_equipo: "", departamento: "", distrito: "", competencia: "Distrital", lugar_especifico: "", estado_actual: "Activo" };
+        showUbiForm.value = true;
+      };
+
+      const getEquipoEmpresa = (id_equipo) => {
+        const eq = db.value.equipos.find(e => e.id_registro === id_equipo);
+        if (!eq) return 'No identificada';
+        return getEmpresaNombre(eq.id_empresa); // Reutilizamos la función que ya tenemos
+      };
+
+      const submitUbi = () => {
+        isLoading.value = true;
+        loadingMessage.value = "Actualizando ubicación del equipo...";
+        google.script.run
+          .withSuccessHandler(() => {
+            Swal.fire('Éxito', 'Nueva ubicación establecida.', 'success');
+            showUbiForm.value = false;
+            loadInitialData();
+          })
+          .saveUbicacionTransaction(formUbi.value);
+      };
+
+      // =====================================
+      // FILTROS DE UBICACIONES
+      // =====================================
+      const searchUbi = ref("");
+      const filterEmpresaUbi = ref("");
+      const filterDepartamentoUbi = ref("");
+      const filterEstadoUbi = ref("Activo"); // Por defecto mostramos solo los activos
+
+      // Propiedad computada que cruza todos los filtros en tiempo real
+      const filteredUbicaciones = computed(() => {
+        let result = db.value.ubicaciones || [];
+
+        // 1. Filtro por Estado (Activo / Histórico)
+        if (filterEstadoUbi.value) {
+          result = result.filter(u => u.estado_actual === filterEstadoUbi.value);
+        }
+
+        // 2. Filtro por Departamento Geográfico
+        if (filterDepartamentoUbi.value) {
+          result = result.filter(u => u.departamento === filterDepartamentoUbi.value);
+        }
+
+        // 3. Filtro por Empresa (Buscamos la relación en la tabla de equipos)
+        if (filterEmpresaUbi.value) {
+          result = result.filter(u => {
+            const eq = db.value.equipos.find(e => e.id_registro === u.id_equipo);
+            return eq && eq.id_empresa === filterEmpresaUbi.value;
+          });
+        }
+
+        // 4. Búsqueda de Texto Libre (Serial, Marca, Distrito, Lugar)
+        if (searchUbi.value) {
+          const q = searchUbi.value.toLowerCase();
+          result = result.filter(u => {
+            const eqMarca = getEquipoMarca(u.id_equipo).toLowerCase();
+            const eqEmpresa = getEquipoEmpresa(u.id_equipo).toLowerCase();
+            return u.id_equipo.toLowerCase().includes(q) ||
+                   u.distrito.toLowerCase().includes(q) ||
+                   u.lugar_especifico.toLowerCase().includes(q) ||
+                   eqMarca.includes(q) ||
+                   eqEmpresa.includes(q);
+          });
+        }
+
+        return result;
+      });
+
+      // =====================================
+      // FILTROS DE EQUIPOS
+      // =====================================
+      const searchEq = ref("");
+      const filterEmpresaEq = ref("");
+      const filterEstadoEq = ref("");
+
+      const filteredEquipos = computed(() => {
+        let result = db.value.equipos || [];
+
+        // 1. Filtro por Estado de Homologación
+        if (filterEstadoEq.value) {
+          result = result.filter(e => e.estado_homologacion === filterEstadoEq.value);
+        }
+
+        // 2. Filtro por Empresa (Dueño)
+        if (filterEmpresaEq.value) {
+          result = result.filter(e => e.id_empresa === filterEmpresaEq.value);
+        }
+
+        // 3. Búsqueda de Texto Libre (ID, Marca, Seriales)
+        if (searchEq.value) {
+          const q = searchEq.value.toLowerCase();
+          result = result.filter(e => {
+            const eqEmpresa = getEmpresaNombre(e.id_empresa).toLowerCase();
+            const psico = (e['serial_psicométrico'] || e.serial_psicometrico || '').toLowerCase();
+            const senso = (e['serial_sensométrico'] || e.serial_sensometrico || '').toLowerCase();
+            
+            return e.id_registro.toLowerCase().includes(q) ||
+                   e.marca.toLowerCase().includes(q) ||
+                   psico.includes(q) ||
+                   senso.includes(q) ||
+                   eqEmpresa.includes(q);
+          });
+        }
+
+        return result;
+      });
+
+      // =====================================
+      // FILTROS Y ESTADO DE RESOLUCIONES
+      // =====================================
+      const activeResTab = ref("LISTADO"); // Controla qué pestaña se ve: 'LISTADO' o 'NUEVA'
+      
+      const searchRes = ref("");
+      const filterTipoActoRes = ref("");
+      const filterEstadoRes = ref("Vigente"); // Mostramos las vigentes por defecto
+
+      const filteredResoluciones = computed(() => {
+        let result = db.value.resoluciones || [];
+
+        // 1. Filtro por Estado (Agregamos r && para asegurar que la fila existe)
+        if (filterEstadoRes.value) {
+          result = result.filter(r => r && r.estado === filterEstadoRes.value);
+        }
+
+        // 2. Filtro por Tipo de Acto
+        if (filterTipoActoRes.value) {
+          result = result.filter(r => r && r.tipo_acto === filterTipoActoRes.value);
+        }
+
+        // 3. Búsqueda Libre (Agregamos || '' para evitar errores con campos vacíos)
+        if (searchRes.value) {
+          const q = searchRes.value.toLowerCase();
+          result = result.filter(r => {
+            if (!r) return false; // Ignora filas fantasma
+            const eqMarca = getEquipoMarca(r.id_equipo_vinculado).toLowerCase();
+            return (r.id_resolucion || '').toLowerCase().includes(q) ||
+                   (r.id_equipo_vinculado || '').toLowerCase().includes(q) ||
+                   eqMarca.includes(q);
+          });
+        }
+
+        return result;
+      });
+
+      // Catálogos Dinámicos de Estados
+      const estadosEquipoList = computed(() => {
+        return db.value.catalogos ? db.value.catalogos.filter(c => c.categoria === 'ESTADO_EQUIPO') : [];
+      });
+
+      const estadosResolucionList = computed(() => {
+        return db.value.catalogos ? db.value.catalogos.filter(c => c.categoria === 'ESTADO_RESOLUCION') : [];
+      });
+
+      // Buscar la ubicación actual del equipo para las Resoluciones
+      const getEquipoUbicacion = (id_equipo) => {
+        if (!db.value.ubicaciones) return 'Sin historial';
+        const ubi = db.value.ubicaciones.find(u => u.id_equipo === id_equipo && u.estado_actual === 'Activo');
+        if (ubi) {
+          return `${ubi.distrito}, ${ubi.departamento}`;
+        }
+        return 'Sin ubicación activa';
+      };
+
+      onMounted(() => loadInitialData());
+
+      return {
+        // 1. Estado Global y Navegación
+        isLoading, loadingMessage, role, currentUser, db, config, currentView, searchQuery,
+        isMobileMenuOpen, navigate, logoANTSV, estadosEquipoList, estadosResolucionList,
+        
+        // 2. Módulo Resoluciones
+        formRes, isFormResValid, triggerFileInput, handleFileUpload, submitResolucion, getEquipoMarca,
+        activeResTab, searchRes, filterTipoActoRes, filterEstadoRes, filteredResoluciones,
+        
+        // 3. Módulo Empresas
+        showEmpresaForm, isEditingEmp, formEmp, isFormEmpValid, openEmpresaForm, submitEmpresa, deleteEmpresa,
+        
+        // 4. Módulo Equipos
+        showEquipoForm, isEditingEq, formEq, isFormEqValid, openEquipoForm, submitEquipo, deleteEquipo, getEmpresaNombre,
+        searchEq, filterEmpresaEq, filterEstadoEq, filteredEquipos,getEquipoUbicacion,
+
+        // 5. Estado Ubicaciones
+        showUbiForm, formUbi, deptosList, distritosFiltrados, isFormUbiValid, openUbiForm, submitUbi, getEquipoEmpresa,
+        searchUbi, filterEmpresaUbi, filterDepartamentoUbi, filterEstadoUbi, filteredUbicaciones
+      };
+    }
+  }).mount('#app');
+</script>
+</body>
+</html>
