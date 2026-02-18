@@ -10,7 +10,7 @@ const SCHEMA = {
   T_EMPRESAS: { sheetName: "APP_EMPRESAS", columns: ["id_empresa", "razon_social", "ruc", "representante", "email", "direccion", "tipo_entidad", "actividad_principal"] },
   T_EQUIPOS: { sheetName: "APP_EQUIPOS", columns: ["id_registro", "id_empresa", "descripcion","marca", "serial_psicométrico", "serial_sensométrico", "estado_homologacion"] },
   T_RESOLUCIONES: { sheetName: "APP_RESOLUCIONES", columns: ["id_resolucion", "tipo_acto", "afecta", "fecha_emision", "vencimiento", "estado", "url_drive", "qr", "id_equipo_vinculado"] },
-  T_UBICACIONES: { sheetName: "APP_UBICACIONES", columns: ["id_ubicacion", "id_equipo", "departamento", "distrito", "competencia","lugar_especifico", "estado_actual"] },
+  T_UBICACIONES: { sheetName: "APP_UBICACIONES", columns: ["id_ubicacion", "id_equipo", "departamento", "distrito", "competencia","lugar_especifico", "estado_actual", "fecha_cierre"] },
   T_CONFIGURACION: { sheetName: "APP_CONFIGURACION", columns: ["clave", "valor", "descripcion", "ultima_modificacion"] },
   T_AUDITORIA: { sheetName: "APP_AUDITORIA", columns: ["id_log", "fecha_hora", "usuario_email", "accion", "tabla_afectada", "detalle_cambio"] },
   T_CATALOGOS: { sheetName: "APP_CATALOGOS", columns: ["id_catalogo", "categoria", "valor", "padre_id", "estado"] }
@@ -341,24 +341,35 @@ function deleteEquipoTransaction(id) {
 // ================= GESTOR DE UBICACIONES =================
 function saveUbicacionTransaction(p) {
   return runWithRetry(() => {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("APP_UBICACIONES");
+    requerirEditor("Ubicaciones");
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName("APP_UBICACIONES");
     const data = sheet.getDataRange().getValues();
-    if (p.estado_actual === "Activo") for (let i = 1; i < data.length; i++) if (data[i][1] === p.id_equipo && data[i][6] === "Activo") sheet.getRange(i + 1, 7).setValue("Histórico");
-    
-    sheet.appendRow(["UBI-" + Utilities.getUuid().substring(0,8).toUpperCase(), p.id_equipo, p.departamento, p.distrito, p.competencia, p.lugar_especifico, p.estado_actual]);
-    logAuditActivity("CREATE", "APP_UBICACIONES", p.id_equipo);
+    const hoy = new Date().toISOString().split('T')[0];
+
+    // Evitar duplicados idénticos
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][1] === p.id_equipo && data[i][6] === "Activo") {
+        if (data[i][2] === p.departamento && data[i][3] === p.distrito && data[i][5] === p.lugar_especifico) {
+          throw new Error("El equipo ya se encuentra en esta ubicación exacta.");
+        }
+        // Cerrar ubicación anterior como Histórico
+        sheet.getRange(i + 1, 7).setValue("Histórico");
+        sheet.getRange(i + 1, 8).setValue(hoy);
+      }
+    }
+
+    sheet.appendRow(["UBI-" + Utilities.getUuid().substring(0,8).toUpperCase(), p.id_equipo, p.departamento, p.distrito, p.competencia, p.lugar_especifico, p.estado_actual, ""]);
     return true;
   });
 }
-
 /**
  * Mantiene el frontend HTML limpio y centraliza los assets en el servidor.
  */
 
 // ================= UTILIDADES =================
 function getLogoBase64() {
-  // Enlace codificado para evitar que la tilde en "Bitácora" rompa la imagen
-  return "https://i.postimg.cc/PqsVJs60/logo2_Bit%C3%A1cora_RNME.png";
+  return "https://i.postimg.cc/SxmBF7N1/Bitacora-Logo.png";
 }
 
 /**
@@ -370,48 +381,47 @@ function cronJobControlDiario() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheetRes = ss.getSheetByName("APP_RESOLUCIONES");
   const sheetEq = ss.getSheetByName("APP_EQUIPOS");
+  const sheetUbi = ss.getSheetByName("APP_UBICACIONES");
 
   const resData = sheetRes.getDataRange().getValues();
   const eqData = sheetEq.getDataRange().getValues();
+  const ubiData = sheetUbi.getDataRange().getValues();
 
   const today = new Date();
-  today.setHours(0,0,0,0); // Normalizamos a medianoche
-
+  today.setHours(0,0,0,0); 
+  const fechaHoyStr = today.toISOString().split('T')[0];
   const vigentesPorEquipo = new Set();
 
-  // 1. Evaluar Resoluciones
+  // 1. Sincronizar Resoluciones
   for (let i = 1; i < resData.length; i++) {
     let tipoActo = resData[i][1];
-    let vencDate = new Date(resData[i][4]);
-    let estado = resData[i][5];
-    let idEq = String(resData[i][8]).trim();
-
-    // Si está vigente pero ya pasó la fecha, la vencemos
-    if (estado === "Vigente" && vencDate < today) {
-      sheetRes.getRange(i + 1, 6).setValue("No Vigente");
-      estado = "No Vigente";
-    }
-
-    // Recolectamos los equipos que SÍ tienen una Homologación o Renovación vigente
-    if (estado === "Vigente" && (tipoActo === "1-Homologación" || tipoActo === "2-Renovación")) {
-      vigentesPorEquipo.add(idEq);
-    }
+    let emision = new Date(resData[i][3]);
+    let vencimiento = new Date(resData[i][4]);
+    let debeEstarVigente = (today >= emision && today <= vencimiento);
+    let nuevoEstadoRes = debeEstarVigente ? "Vigente" : "No Vigente";
+    if (resData[i][5] !== nuevoEstadoRes) sheetRes.getRange(i + 1, 6).setValue(nuevoEstadoRes);
+    if (debeEstarVigente && (tipoActo === "1-Homologación" || tipoActo === "2-Renovación")) vigentesPorEquipo.add(String(resData[i][8]).trim());
   }
 
-  // 2. Actualizar Estado de los Equipos
+  // 2. Sincronizar Equipos y Ubicaciones con FECHA DE CIERRE
   for (let i = 1; i < eqData.length; i++) {
     let idEq = String(eqData[i][0]).trim();
-    let estadoActual = eqData[i][6];
-    
-    // Si el equipo está en la lista 'vigentesPorEquipo', es Homologado. Si no, No Homologado.
-    let nuevoEstado = vigentesPorEquipo.has(idEq) ? "Homologado" : "No Homologado";
+    let esHomologado = vigentesPorEquipo.has(idEq);
+    let nuevoEstadoEq = esHomologado ? "Homologado" : "No Homologado";
+    if (eqData[i][6] !== nuevoEstadoEq) sheetEq.getRange(i + 1, 7).setValue(nuevoEstadoEq);
 
-    if (estadoActual !== nuevoEstado) {
-      sheetEq.getRange(i + 1, 7).setValue(nuevoEstado);
+    // Regla para Ubicaciones
+    let nuevoEstadoUbi = esHomologado ? "Activo" : "Inactivo";
+    for (let j = 1; j < ubiData.length; j++) {
+      if (String(ubiData[j][1]).trim() === idEq && (ubiData[j][6] === "Activo" || ubiData[j][6] === "Inactivo")) {
+        if (ubiData[j][6] !== nuevoEstadoUbi) {
+          sheetUbi.getRange(j + 1, 7).setValue(nuevoEstadoUbi);
+          // Si pasa a Inactivo ponemos fecha, si vuelve a Activo la borramos
+          sheetUbi.getRange(j + 1, 8).setValue(nuevoEstadoUbi === "Inactivo" ? fechaHoyStr : "");
+        }
+      }
     }
   }
-  
-  logAuditActivity("SYSTEM_CRON", "APP_RESOLUCIONES & APP_EQUIPOS", "Control de vigencias automático ejecutado");
 }
 
 /**

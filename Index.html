@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bitácora RNME - ANTSV</title>
+  <title>Bitácora Gestión del RNME - ANTSV</title>
   
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
@@ -97,7 +97,7 @@
     <div v-else-if="config.MODO_MANTENIMIENTO === 'True' && role !== 'ADMIN'" class="container text-center mt-5">
       <img :src="logoANTSV" alt="ANTSV" style="max-width: 200px;" class="mb-4">
       <h1 style="color: var(--antsv-dark);"><i class="bi bi-tools me-2"></i>Sistema en Mantenimiento</h1>
-      <p class="lead">La Bitácora RNME está bajo actualización. Contacte a <strong style="color: var(--antsv-green);">{{ config.EMAIL_SOPORTE_TECNICO }}</strong>.</p>
+      <p class="lead">La app Gestión del RNME está bajo actualización. Contacte a <strong style="color: var(--antsv-green);">{{ config.EMAIL_SOPORTE_TECNICO }}</strong>.</p>
     </div>
 
     <div class="wrapper" v-else>
@@ -106,7 +106,7 @@
         <div class="sidebar-header">
           <img v-if="logoANTSV" :src="logoANTSV" alt="Logo RNME">
           <div v-else class="text-white fs-1"><i class="bi bi-image"></i></div>
-          <h6 class="mt-2 text-uppercase fw-bold" style="color: var(--antsv-green);">Bitácora RNME</h6>
+          <h6 class="mt-2 text fw-bold" style="color: var(--antsv-green);">Gestión del RNME</h6>
           <span class="badge" style="background-color: var(--antsv-green);"><i class="bi bi-person-badge me-1"></i>{{ role }}</span>
         </div>
 
@@ -130,10 +130,10 @@
 
             <div v-if="role === 'PUBLIC'" class="d-flex align-items-center">
               <img v-if="logoANTSV" :src="logoANTSV" alt="ANTSV" style="height: 40px;" class="me-2">
-              <h4 class="mb-0 fw-bold" style="color: var(--antsv-dark);">Bitácora</h4>
+              <h4 class="mb-0 fw-bold" style="color: var(--antsv-dark);">Gestión del RNME</h4>
             </div>
             <h5 class="mb-0 fw-bold d-none d-md-block" style="color: var(--antsv-dark);" v-else>
-              {{ currentView === 'DASHBOARD' ? 'Panel de Control' : currentView }}
+              {{ currentView === 'DASHBOARD' ? 'Dashboard' : currentView }}
             </h5>
           </div>
 
@@ -511,8 +511,8 @@
                     <thead class="table-light text-center">
                       <tr>
                         <th>ID Registro</th>
-                        <th>Empresa</th>
                         <th>Marca</th>
+                        <th>Propietario</th>
                         <th>Componentes</th>
                         <th>Estado</th>
                         <th v-if="esEditor('Equipos')">Acciones</th>
@@ -521,8 +521,8 @@
                     <tbody>
                       <tr v-for="eq in filteredEquipos" :key="eq.id_registro">
                         <td class="text-center fw-bold" style="color: var(--antsv-dark);">{{ eq.id_registro }}</td>
-                        <td>{{ getEmpresaNombre(eq.id_empresa) }}</td>
                         <td class="text-center">{{ eq.marca }}</td>
+                        <td>{{ getEmpresaNombre(eq.id_empresa) }}</td>
                         <td class="align-middle text-nowrap">
                           <div class="small text-start">
                             <div class="mb-1"><span class="fw-bold" style="color: var(--antsv-dark);">Nro. Serie Psicométrico: </span> <span class="text-muted">{{ eq['serial_psicométrico'] || eq.serial_psicometrico || 'N/A' }}</span></div>
@@ -551,90 +551,164 @@
             </div>
           </div>
 
-          <div v-if="currentView === 'UBICACIONES'" class="card shadow-sm border-0">
-            <div class="card-header d-flex justify-content-between align-items-center p-3">
-              <h5 class="mb-0"><i class="bi bi-pin-map me-2"></i>Historial de Ubicaciones</h5>
-              <button class="btn btn-primary btn-sm" @click="openUbiForm()" v-if="!showUbiForm && esEditor('Ubicaciones')">
-                <i class="bi bi-geo-fill me-1"></i> Asignar Nueva Ubicación
-              </button>
-            </div>
-            <div class="card-body">
-              <div v-if="showUbiForm" class="p-4 rounded mb-4 shadow-sm" style="background-color: rgba(36, 63, 92, 0.03); border: 1px solid var(--antsv-light);">
-                <h5 class="mb-4 fw-bold" style="color: var(--antsv-green); border-bottom: 2px solid var(--antsv-green); display: inline-block;">Registrar Movimiento de Equipo</h5>
-                <div class="row g-3">
-                  <div class="col-md-4"><label class="form-label fw-bold">Equipo a Ubicar <span class="text-danger">*</span></label><select class="form-select" v-model="formUbi.id_equipo"><option v-for="eq in db.equipos" :value="eq.id_registro">{{ eq.id_registro }} - {{ eq.marca }}</option></select></div>
-                  <div class="col-md-4"><label class="form-label fw-bold">Departamento <span class="text-danger">*</span></label><select class="form-select" v-model="formUbi.departamento"><option value="">Seleccione...</option><option v-for="d in deptosList" :value="d.valor">{{ d.valor }}</option></select></div>
-                  <div class="col-md-4"><label class="form-label fw-bold">Distrito <span class="text-danger">*</span></label><select class="form-select" v-model="formUbi.distrito" :disabled="!formUbi.departamento"><option value="">Seleccione Distrito...</option><option v-for="dis in distritosFiltrados" :value="dis.valor">{{ dis.valor }}</option></select></div>
-                  <div class="col-md-4">
-                    <label class="form-label fw-bold">Nivel de Competencia</label>
-                    <select class="form-select" v-model="formUbi.competencia">
-                      <option value="Municipal">Municipal</option><option value="Distrital">Distrital</option><option value="Departamental">Departamental</option><option value="Nacional">Nacional</option>
-                    </select>
-                  </div>
-                  <div class="col-md-8"><label class="form-label fw-bold">Lugar Específico / Dirección <span class="text-danger">*</span></label><input type="text" class="form-control" v-model="formUbi.lugar_especifico" placeholder="Ej: Municipalidad de... o Clínica..."></div>
+        <div v-if="currentView === 'UBICACIONES'" class="card shadow-sm border-0">
+          <div class="card-header d-flex justify-content-between align-items-center p-3">
+            <h5 class="mb-0"><i class="bi bi-pin-map me-2"></i>Historial de Ubicaciones</h5>
+            <button class="btn btn-primary btn-sm" @click="openUbiForm()" v-if="!showUbiForm && esEditor('Ubicaciones')">
+              <i class="bi bi-geo-fill me-1"></i> Asignar Nueva Ubicación
+            </button>
+          </div>
+          
+          <div class="card-body">
+            <div v-if="showUbiForm" class="p-4 rounded mb-4 shadow-sm border" style="background-color: #f8f9fa;">
+              <h5 class="mb-4 fw-bold text-primary border-bottom pb-2">
+                <i class="bi bi-truck me-2"></i>Registrar Movimiento de Equipo
+              </h5>
+              
+              <div class="row g-4">
+                <div class="col-12">
+                  <label class="form-label fw-bold text-dark">1. Seleccione el Equipo <span class="text-danger">*</span></label>
+                  <select class="form-select form-select-lg border-primary shadow-sm" v-model="formUbi.id_equipo">
+                    <option value="" disabled>Elegir equipo de la lista...</option>
+                    <option v-for="eq in db.equipos" :key="eq.id_registro" :value="eq.id_registro">
+                      {{ eq.id_registro }} - {{ eq.marca }} ({{ getEmpresaNombre(eq.id_empresa) }})
+                    </option>
+                  </select>
                 </div>
-                <div class="mt-4 text-end">
-                  <button class="btn btn-outline-secondary me-2" @click="showUbiForm = false">Cancelar</button>
-                  <button class="btn btn-primary px-4" @click="submitUbi" :disabled="!isFormUbiValid"><i class="bi bi-save me-1"></i> Confirmar Ubicación Activa</button>
+
+                <div class="col-12" v-if="formUbi.id_equipo">
+                  <div class="card bg-white border-warning shadow-sm">
+                    <div class="card-header bg-warning bg-opacity-10 py-2">
+                      <small class="fw-bold text-warning-emphasis text-uppercase"><i class="bi bi-geo-alt me-1"></i> Ubicación Actual (Origen)</small>
+                    </div>
+                    <div class="card-body py-3">
+                      <div class="row" v-if="ubicacionActualSeleccionada">
+                        <div class="col-md-3">
+                          <small class="text-muted d-block">Departamento / Distrito</small>
+                          <span class="fw-bold">{{ ubicacionActualSeleccionada.departamento }}</span><br>
+                          <span class="small">{{ ubicacionActualSeleccionada.distrito }}</span>
+                        </div>
+                        <div class="col-md-3 border-start">
+                          <small class="text-muted d-block">Nivel</small>
+                          <span class="badge bg-secondary">{{ ubicacionActualSeleccionada.competencia }}</span>
+                        </div>
+                        <div class="col-md-6 border-start">
+                          <small class="text-muted d-block">Lugar Específico</small>
+                          <i class="bi bi-info-circle me-1 text-muted"></i>{{ ubicacionActualSeleccionada.lugar_especifico }}
+                        </div>
+                      </div>
+                      <div v-else class="text-center py-2 text-muted">
+                        <i class="bi bi-exclamation-triangle me-2"></i>Este equipo no tiene una ubicación activa registrada.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="col-12" v-if="formUbi.id_equipo">
+                  <div class="card bg-white border-success shadow-sm">
+                    <div class="card-header bg-success bg-opacity-10 py-2">
+                      <small class="fw-bold text-success text-uppercase"><i class="bi bi-geo-fill me-1"></i> Nueva Ubicación de Destino</small>
+                    </div>
+                    <div class="card-body">
+                      <div class="row g-3">
+                        <div class="col-md-4">
+                          <label class="form-label small fw-bold">Nuevo Departamento <span class="text-danger">*</span></label>
+                          <select class="form-select" v-model="formUbi.departamento">
+                            <option value="">Seleccione...</option>
+                            <option v-for="d in deptosList" :key="d.valor" :value="d.valor">{{ d.valor }}</option>
+                          </select>
+                        </div>
+                        <div class="col-md-4">
+                          <label class="form-label small fw-bold">Nuevo Distrito <span class="text-danger">*</span></label>
+                          <select class="form-select" v-model="formUbi.distrito" :disabled="!formUbi.departamento">
+                            <option value="">Seleccione Distrito...</option>
+                            <option v-for="dis in distritosFiltrados" :key="dis.valor" :value="dis.valor">{{ dis.valor }}</option>
+                          </select>
+                        </div>
+                        <div class="col-md-4">
+                          <label class="form-label small fw-bold">Nuevo Nivel de Competencia</label>
+                          <select class="form-select" v-model="formUbi.competencia">
+                            <option value="Municipal">Municipal</option>
+                            <option value="Distrital">Distrital</option>
+                            <option value="Departamental">Departamental</option>
+                            <option value="Nacional">Nacional</option>
+                          </select>
+                        </div>
+                        <div class="col-md-12">
+                          <label class="form-label small fw-bold">Nueva Dirección / Lugar Específico <span class="text-danger">*</span></label>
+                          <input type="text" class="form-control" v-model="formUbi.lugar_especifico" placeholder="Ej: Clínica Central de la Municipalidad de...">
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
+              
+              <div class="mt-4 d-flex justify-content-end gap-2">
+                <button class="btn btn-outline-secondary px-4" @click="showUbiForm = false">Cancelar</button>
+                <button class="btn btn-primary px-4 shadow" @click="submitUbi" :disabled="!isFormUbiValid">
+                  <i class="bi bi-save me-2"></i>Confirmar Nuevo Traslado
+                </button>
+              </div>
+            </div>
 
-              <div v-show="!showUbiForm">
-                <div class="row g-2 mb-3 p-3 rounded" style="background-color: var(--antsv-light); border: 1px solid rgba(36, 63, 92, 0.1);">
-                  <div class="col-md-3"><div class="input-group input-group-sm"><span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span><input type="text" class="form-control" v-model="searchUbi" placeholder="Buscar serial, marca, ciudad..."></div></div>
-                  <div class="col-md-3"><select class="form-select form-select-sm" v-model="filterEmpresaUbi"><option value="">🏢 Todas las Empresas</option><option v-for="emp in db.empresas" :key="emp.id_empresa" :value="emp.id_empresa">{{ emp.razon_social }}</option></select></div>
-                  <div class="col-md-3"><select class="form-select form-select-sm" v-model="filterDepartamentoUbi"><option value="">📍 Todos los Departamentos</option><option v-for="d in deptosList" :key="d.valor" :value="d.valor">{{ d.valor }}</option></select></div>
-                  <div class="col-md-3"><select class="form-select form-select-sm" v-model="filterEstadoUbi"><option value="">🟢/⚪ Todos los Estados (Historial)</option><option value="Activo">🟢 Solo Ubicaciones Activas</option><option value="Histórico">⚪ Solo Histórico Anterior</option></select></div>
-                </div>
-                <div class="table-responsive">
-                  <table class="table table-hover align-middle border shadow-sm">
-                    <thead class="table-light">
-                      <tr>
-                        <th>Equipo / Marca</th>
-                        <th>Ubicación Geográfica</th>
-                        <th>Nivel / Dirección</th>
-                        <th>Estado</th>
-                        <th class="text-center">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="u in filteredUbicaciones" :key="u.id_ubicacion" :class="{'table-info': u.estado_actual === 'Activo'}">
-                        <td>
-                          <div class="fw-bold" style="color: var(--antsv-dark); font-size: 1.1rem;"><i class="bi bi-cpu me-1"></i> {{ u.id_equipo }}</div>
-                          <div class="mt-1" style="font-size: 0.85rem;">
-                            <div class="mb-1"><span class="fw-bold text-uppercase" style="color: var(--antsv-dark); font-size: 0.75rem;">Marca:</span> <span class="text-muted">{{ getEquipoMarca(u.id_equipo) }}</span></div>
-                            <div><span class="fw-bold text-uppercase" style="color: var(--antsv-dark); font-size: 0.75rem;">Propietario:</span> <span class="text-muted">{{ getEquipoEmpresa(u.id_equipo) }}</span></div>
+            <div v-show="!showUbiForm">
+              <div class="row g-2 mb-3 p-3 rounded" style="background-color: var(--antsv-light); border: 1px solid rgba(36, 63, 92, 0.1);">
+                <div class="col-md-3"><div class="input-group input-group-sm"><span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span><input type="text" class="form-control" v-model="searchUbi" placeholder="Buscar serial, marca, ciudad..."></div></div>
+                <div class="col-md-3"><select class="form-select form-select-sm" v-model="filterEmpresaUbi"><option value="">🏢 Todas las Empresas</option><option v-for="emp in db.empresas" :key="emp.id_empresa" :value="emp.id_empresa">{{ emp.razon_social }}</option></select></div>
+                <div class="col-md-3"><select class="form-select form-select-sm" v-model="filterDepartamentoUbi"><option value="">📍 Todos los Departamentos</option><option v-for="d in deptosList" :key="d.valor" :value="d.valor">{{ d.valor }}</option></select></div>
+                <div class="col-md-3"><select class="form-select form-select-sm" v-model="filterEstadoUbi"><option value="">🟢/⚪ Todos los Estados</option><option value="Activo">🟢 Solo Ubicaciones Activas</option><option value="Histórico">⚪ Solo Histórico Anterior</option></select></div>
+              </div>
+              <div class="table-responsive">
+                <table class="table table-hover align-middle border shadow-sm">
+                  <thead class="table-light">
+                    <tr><th>Equipo / Marca</th><th>Ubicación Geográfica</th><th>Nivel / Dirección</th><th>Estado</th><th class="text-center">Acciones</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="u in filteredUbicaciones" :key="u.id_ubicacion" :class="{'table-info': u.estado_actual === 'Activo'}">
+                      <td>
+                        <div class="fw-bold" style="color: var(--antsv-dark); font-size: 1.1rem;"><i class="bi bi-cpu me-1"></i> {{ u.id_equipo }}</div>
+                        <div class="mt-1" style="font-size: 0.85rem;">
+                          <div class="mb-1"><span class="fw-bold text-uppercase" style="color: var(--antsv-dark); font-size: 0.75rem;">Marca:</span> <span class="text-muted">{{ getEquipoMarca(u.id_equipo) }}</span></div>
+                          
+                          <div>
+                            <span class="fw-bold text-uppercase" style="color: var(--antsv-dark); font-size: 0.75rem;">Estado:</span> 
+                            <span :class="getEquipoEstadoLegal(u.id_equipo) === 'Homologado' ? 'text-success fw-bold' : 'text-danger fw-bold'">
+                              {{ getEquipoEstadoLegal(u.id_equipo) }}
+                            </span>
                           </div>
-                        </td>
-                        <td>
-                          <div class="d-flex align-items-center">
-                            <i class="bi bi-geo-alt-fill text-danger me-2 fs-5"></i>
-                            <div>
-                              <div class="fw-bold">{{ u.departamento }}</div>
-                              <div class="small text-muted">{{ u.distrito }}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td>
-                          <div class="badge mb-1" style="background-color: transparent; border: 1px solid var(--antsv-dark); color: var(--antsv-dark);">{{ u.competencia }}</div>
-                          <div class="small">{{ u.lugar_especifico }}</div>
-                        </td>
-                        <td>
-                          <span class="badge" :class="u.estado_actual === 'Activo' ? 'bg-success' : 'bg-secondary'"><i :class="u.estado_actual === 'Activo' ? 'bi bi-check-circle' : 'bi bi-clock-history'" class="me-1"></i>{{ u.estado_actual }}</span>
-                        </td>
-                        <td class="text-center">
-                          <button class="btn btn-sm btn-outline-secondary" @click="viewUbiDetails(u)" title="Ver Detalles"><i class="bi bi-eye"></i></button>
-                        </td>
-                      </tr>
-                      <tr v-if="filteredUbicaciones.length === 0">
-                        <td colspan="5" class="text-center p-5 text-muted"><i class="bi bi-search display-6 d-block mb-3 opacity-50"></i>No se encontraron ubicaciones con los filtros actuales.</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                        </div>
+                      </td>
+
+                      <td>
+                        <div class="d-flex align-items-center">
+                          <i class="bi bi-geo-alt-fill text-danger me-2 fs-5"></i>
+                          <div><div class="fw-bold">{{ u.departamento }}</div><div class="small text-muted">{{ u.distrito }}</div></div>
+                        </div>
+                      </td>
+                      <td><div class="badge mb-1" style="background-color: transparent; border: 1px solid var(--antsv-dark); color: var(--antsv-dark);">{{ u.competencia }}</div><div class="small">{{ u.lugar_especifico }}</div></td>
+
+                      <td>
+                        <div class="badge w-100 mb-1" :class="u.estado_actual === 'Activo' ? 'bg-primary' : 'bg-secondary'">
+                          <i :class="u.estado_actual === 'Activo' ? 'bi bi-geo-fill' : 'bi bi-clock-history'" class="me-1"></i>{{ u.estado_actual }}
+                        </div>
+                        
+                        <div v-if="u.estado_actual === 'Activo'" class="badge w-100" :class="getEquipoEstadoLegal(u.id_equipo) === 'Homologado' ? 'bg-success' : 'bg-danger'">
+                          <i :class="getEquipoEstadoLegal(u.id_equipo) === 'Homologado' ? 'bi bi-shield-check' : 'bi bi-shield-x'" class="me-1"></i>
+                          {{ getEquipoEstadoLegal(u.id_equipo) === 'Homologado' ? 'Vigente' : 'No Homologado' }}
+                        </div>
+                      </td>
+
+                      <td class="text-center">
+                        <button class="btn btn-sm btn-outline-secondary" @click="viewUbiDetails(u)" title="Ver Detalles"><i class="bi bi-eye"></i></button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
+        </div>
 
           <div v-if="currentView === 'CONFIGURACION'" class="card shadow-sm border-0">
             <div class="card-header p-0" style="background-color: var(--antsv-dark); border-radius: 10px 10px 0 0;">
@@ -1088,7 +1162,11 @@
                 }).withFailureHandler(err => { isLoading.value = false; Swal.fire('Error', err.message, 'error'); })
                 .updateResolucionTransaction(payloadData);
             } else {
-              const payloadFile = { base64: formRes.value.fileBase64, nombre: 'Res_' + formRes.value.numero + '_' + formRes.value.anio + '_' + formRes.value.id_equipo.join('-') + '.pdf', mimeType: formRes.value.mimeType };
+              const payloadFile = { 
+                base64: formRes.value.fileBase64, 
+                nombre: resolucionFormateada.value + ".pdf", // Resultado: ANTSV N° 670_2023.pdf
+                mimeType: formRes.value.mimeType 
+              };
               google.script.run
                 .withSuccessHandler(() => {
                   isLoading.value = false; Swal.fire('Éxito', 'Trámite legal registrado y equipos actualizados.', 'success');
@@ -1116,6 +1194,12 @@
         }
         return result;
       });
+
+      // Función para obtener el estado de homologación real desde la tabla de EQUIPOS
+        const getEquipoEstadoLegal = (id_equipo) => {
+          const eq = (db.value.equipos || []).find(e => String(e.id_registro).trim() === String(id_equipo).trim());
+          return eq ? eq.estado_homologacion : 'Sin Datos';
+        };
 
       const estadosResolucionList = computed(() => db.value.catalogos ? db.value.catalogos.filter(c => c.categoria === 'ESTADO_RESOLUCION') : []);
 
@@ -1238,27 +1322,61 @@
         };
 
         const viewUbiDetails = (u) => {
+          // Si tiene fecha de cierre, preparamos el texto, si no, ponemos "En curso"
+          const cierreInfo = u.fecha_cierre ? `<b>Fecha de Cierre:</b> ${u.fecha_cierre}` : `<b>Fecha de Cierre:</b> <span class="text-success">Vigente / En curso</span>`;
+
           Swal.fire({
-            title: '<i class="bi bi-geo-alt-fill text-danger"></i> Detalles de Ubicación',
-            html: '<div class="text-start mt-3" style="color: var(--antsv-dark);">' +
-                  '<p><b>Equipo:</b> ' + u.id_equipo + ' (' + getEquipoMarca(u.id_equipo) + ')</p>' +
-                  '<p><b>Propietario:</b> ' + getEquipoEmpresa(u.id_equipo) + '</p>' +
-                  '<p><b>Nivel de Competencia:</b> ' + u.competencia + '</p>' +
-                  '<p><b>Departamento:</b> ' + u.departamento + '</p>' +
-                  '<p><b>Distrito:</b> ' + u.distrito + '</p>' +
-                  '<p><b>Dirección/Lugar:</b> ' + u.lugar_especifico + '</p>' +
-                  '<hr>' +
-                  '<p class="mb-0"><b>Estado en Historial:</b> <span class="badge ' + (u.estado_actual === 'Activo' ? 'bg-success' : 'bg-secondary') + '">' + u.estado_actual + '</span></p>' +
-                  '</div>',
-            confirmButtonColor: '#84B74C',
-            confirmButtonText: 'Cerrar'
+            title: '<i class="bi bi-info-square-fill text-primary"></i> Detalles del Registro',
+            html: `
+              <div class="text-start mt-3" style="font-size: 0.95rem;">
+                <p><b>Equipo:</b> ${u.id_equipo} (${getEquipoMarca(u.id_equipo)})</p>
+                <p><b>Ubicación:</b> ${u.distrito}, ${u.departamento}</p>
+                <p><b>Dirección:</b> ${u.lugar_especifico}</p>
+                <p><b>Nivel:</b> ${u.competencia}</p>
+                <hr>
+                <p><b>Estado Histórico:</b> <span class="badge ${u.estado_actual === 'Activo' ? 'bg-success' : 'bg-secondary'}">${u.estado_actual}</span></p>
+                <p>${cierreInfo}</p>
+              </div>`,
+            confirmButtonColor: '#243F5C'
           });
         };
 
         const submitUbi = () => {
-          isLoading.value = true; loadingMessage.value = "Actualizando ubicación...";
+          // VALIDACIÓN DE DUPLICADOS:
+          if (ubicacionActualSeleccionada.value) {
+            const uAct = ubicacionActualSeleccionada.value;
+            const uNew = formUbi.value;
+
+            const esMismaUbicacion = 
+              String(uAct.departamento).trim() === String(uNew.departamento).trim() &&
+              String(uAct.distrito).trim() === String(uNew.distrito).trim() &&
+              String(uAct.lugar_especifico).trim() === String(uNew.lugar_especifico).trim();
+
+            if (esMismaUbicacion) {
+              Swal.fire({
+                title: 'Ubicación Identica',
+                text: 'El equipo ya se encuentra registrado en esa ubicación exacta. No es necesario realizar el movimiento.',
+                icon: 'info',
+                confirmButtonColor: '#243F5C'
+              });
+              return; // Detiene la ejecución
+            }
+          }
+
+          // Si pasa la validación, procede con el guardado normal
+          isLoading.value = true;
+          loadingMessage.value = "Actualizando ubicación...";
           google.script.run
-            .withSuccessHandler(() => { Swal.fire('Éxito', 'Ubicación establecida.', 'success'); showUbiForm.value = false; refreshDataSilent(); })
+            .withSuccessHandler(() => { 
+              isLoading.value = false;
+              Swal.fire('Éxito', 'Ubicación establecida correctamente.', 'success'); 
+              showUbiForm.value = false; 
+              refreshDataSilent(); 
+            })
+            .withFailureHandler(err => {
+              isLoading.value = false;
+              Swal.fire('Error', err.message, 'error');
+            })
             .saveUbicacionTransaction(formUbi.value);
         };
 
@@ -1274,6 +1392,15 @@
             result = result.filter(u => u.id_equipo.toLowerCase().includes(q) || u.distrito.toLowerCase().includes(q) || u.lugar_especifico.toLowerCase().includes(q) || getEquipoMarca(u.id_equipo).toLowerCase().includes(q));
           }
           return result;
+        });
+
+        // Obtiene el objeto completo de la ubicación activa para el equipo elegido en el formulario
+        const ubicacionActualSeleccionada = computed(() => {
+          if (!formUbi.value.id_equipo || !db.value.ubicaciones) return null;
+          return db.value.ubicaciones.find(u => 
+            String(u.id_equipo).trim() === String(formUbi.value.id_equipo).trim() && 
+            u.estado_actual === 'Activo'
+          );
         });
 
         onMounted(() => loadInitialData());
@@ -1340,7 +1467,7 @@
         return {
           logoANTSV, isLoading, isRefreshing, loadingMessage, role, currentUser, db, config, currentView, isMobileMenuOpen, navigate,
           
-          activeConfigTab, isEditingConfig, formConfig, toggleEditConfig, submitConfig,
+          activeConfigTab, isEditingConfig, formConfig, toggleEditConfig, submitConfig, ubicacionActualSeleccionada, getEquipoEstadoLegal,
 
           showUserForm, isEditingUser, modulosDisponibles, formUser, isFormUserValid, generateAvatar, openUserForm, submitUser, deleteUser,
           
