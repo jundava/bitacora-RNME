@@ -321,6 +321,15 @@
               </div>
 
               <div v-show="activeResTab === 'NUEVA'" class="p-4 rounded shadow-sm" style="background-color: rgba(36, 63, 92, 0.03); border: 1px solid var(--antsv-light);">
+                
+                <div class="alert alert-warning border-warning d-flex align-items-center mb-4 shadow-sm">
+                  <i class="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
+                  <div>
+                    <strong class="d-block">Importante antes de continuar:</strong>
+                    Asegúrese de haber registrado previamente los <strong>Equipos</strong> en el módulo correspondiente. No podrá vincular resoluciones a equipos que no existan en la base de datos.
+                  </div>
+                </div>
+
                 <div class="d-flex justify-content-between align-items-center mb-4 pb-2" style="border-bottom: 2px solid var(--antsv-green);">
                   <h5 class="mb-0 fw-bold" style="color: var(--antsv-green);"><i :class="isEditingRes ? 'bi bi-pencil-square' : 'bi bi-file-earmark-plus'" class="me-1"></i> {{ isEditingRes ? 'Editar Resolución: ' + formRes.id_original : 'Registrar Nuevo Documento Legal' }}</h5>
                   <button v-if="isEditingRes" class="btn btn-sm btn-outline-secondary" @click="isEditingRes = false; activeResTab = 'LISTADO'"><i class="bi bi-x-circle me-1"></i>Cancelar Edición</button>
@@ -328,115 +337,129 @@
 
                 <div class="row g-4">
                   <div class="col-md-6">
-                    <label class="form-label fw-bold" style="color: var(--antsv-dark);">Número de Resolución</label>
-                    <div class="input-group mb-3 shadow-sm">
-                      <span class="input-group-text bg-white"><i class="bi bi-hash text-muted me-1"></i>ANTSV N°</span>
-                      <input type="number" class="form-control" v-model="formRes.numero" placeholder="Ej: 639" min="1">
-                      <span class="input-group-text bg-light">/</span>
-                      <input type="number" class="form-control" v-model="formRes.anio" placeholder="Ej: 2025" min="2020">
-                    </div>
-
-                    <div class="mb-3">
-                      <label class="form-label fw-bold" style="color: var(--antsv-dark);"><i class="bi bi-bookmark-star me-1 text-muted"></i>Tipo de Acto</label>
-                      <select class="form-select shadow-sm" v-model="formRes.tipo_acto">
+                    <div class="mb-4">
+                      <label class="form-label fw-bold text-primary"><i class="bi bi-bookmark-star me-2"></i>1. Tipo de Acto</label>
+                      <select class="form-select shadow-sm border-primary" v-model="formRes.tipo_acto">
                         <option value="1-Homologación">1-Homologación Inicial</option>
                         <option value="2-Renovación">2-Renovación</option>
                         <option value="3-Cambio Ubicación">3-Cambio Ubicación</option>
                       </select>
                     </div>
 
-                    <div class="mb-3 p-3 rounded bg-warning bg-opacity-10 border border-warning" v-if="formRes.tipo_acto !== '1-Homologación'">
-                      <label class="form-label fw-bold text-dark"><i class="bi bi-link-45deg me-1 text-warning"></i>Resolución Anterior (Vinculada) <span class="text-danger">*</span></label>
+                    <div class="mb-4">
+                      <label class="form-label fw-bold"><i class="bi bi-hash me-2"></i>2. Número de Resolución</label>
+                      <div class="input-group shadow-sm">
+                        <span class="input-group-text bg-white">ANTSV N°</span>
+                        <input type="number" class="form-control" v-model="formRes.numero" placeholder="Ej: 639">
+                        <span class="input-group-text bg-light">/</span>
+                        <input type="number" class="form-control" v-model="formRes.anio" placeholder="2026">
+                      </div>
+                    </div>
+
+                    <div class="mb-4">
+                      <label class="form-label fw-bold"><i class="bi bi-calendar-event me-2"></i>3. Fechas de Vigencia</label>
+                      <div class="row g-2">
+                        <div class="col-6">
+                          <small class="text-muted d-block mb-1">Fecha Resolución</small>
+                          <input type="date" class="form-control shadow-sm" v-model="formRes.fecha_emision">
+                        </div>
+                        <div class="col-6">
+                          <small class="text-muted d-block mb-1">Vencimiento (1 año)</small>
+                          <input type="date" class="form-control shadow-sm bg-light" v-model="formRes.vencimiento">
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="mb-4 p-3 rounded bg-warning bg-opacity-10 border border-warning" v-if="formRes.tipo_acto !== '1-Homologación'">
+                      <label class="form-label fw-bold text-dark"><i class="bi bi-link-45deg me-2 text-warning"></i>4. Resolución Anterior (Vinculada)</label>
                       <select class="form-select shadow-sm border-warning" v-model="formRes.afecta">
-                        <option value="" disabled>Seleccione la resolución madre...</option>
+                        <option value="" disabled>Seleccione resolución madre...</option>
                         <option v-for="rm in resolucionesMadreList" :key="rm.id_resolucion" :value="rm.id_resolucion">
                           {{ rm.id_resolucion }} ({{ rm.estado }})
                         </option>
                       </select>
-                      <div class="form-text small mt-1">Este trámite heredará los datos o fechas de la resolución original seleccionada.</div>
-                    </div>
-
-                    <div class="mb-3">
-                      <label class="form-label fw-bold" style="color: var(--antsv-dark);"><i class="bi bi-pc-display me-1 text-muted"></i>Equipos Afectados</label>
-                      <div class="border rounded p-2 shadow-sm bg-white" style="max-height: 180px; overflow-y: auto;">
-                        <div class="form-check" v-for="eq in db.equipos" :key="eq.id_registro">
-                          <input class="form-check-input" type="checkbox" :value="eq.id_registro" v-model="formRes.id_equipo" :id="'chk_res_'+eq.id_registro">
-                          <label class="form-check-label w-100" :for="'chk_res_'+eq.id_registro" style="cursor: pointer;">
-                            <div class="d-flex justify-content-between align-items-center pe-2">
-                              <span><strong style="color: var(--antsv-dark);">{{ eq.id_registro }}</strong> - {{ eq.marca }}</span>
-                              <small class="text-muted" style="font-size: 0.75rem;"><i class="bi bi-geo-alt-fill text-danger me-1"></i>{{ getEquipoUbicacion(eq.id_registro) }}</small>
-                            </div>
-                          </label>
-                        </div>
-                      </div>
                     </div>
                   </div>
 
                   <div class="col-md-6">
-                    <div v-if="!isEditingRes">
-                      <label class="form-label fw-bold" style="color: var(--antsv-dark);">Documento Escaneado (PDF)</label>
-                      <div class="drag-drop-zone shadow-sm mb-3" @click="triggerFileInput">
-                        <div v-if="!formRes.fileName"><i class="bi bi-cloud-arrow-up display-4"></i><p class="mt-2 mb-0">Arrastre el PDF aquí</p></div>
-                        <div v-else style="color: var(--antsv-green);"><i class="bi bi-file-earmark-pdf-fill display-4"></i><p class="mt-2 mb-0 fw-bold">✅ {{ formRes.fileName }} preparado.</p></div>
-                      </div>
-                      <input type="file" id="pdfUploader" accept="application/pdf" style="display: none;" @change="handleFileUpload">
-                    </div>
-                    <div v-else class="alert alert-secondary text-center mb-3"><i class="bi bi-file-earmark-pdf me-2"></i>El archivo PDF original se conservará.</div>
-
-                    <div class="card border-primary shadow-sm mt-3">
-                      <div class="card-header bg-primary bg-opacity-10 py-2 d-flex justify-content-between align-items-center">
-                        <div class="form-check form-switch mb-0">
-                          <input class="form-check-input border-primary" type="checkbox" role="switch" id="switchUbis" v-model="formRes.incluir_ubicaciones">
-                          <label class="form-check-label fw-bold text-dark ms-1" for="switchUbis" style="cursor: pointer;">
-                            <i class="bi bi-geo-alt-fill me-1 text-primary"></i> Asignar / Actualizar Ubicaciones Físicas
+                    <div class="mb-4">
+                      <label class="form-label fw-bold"><i class="bi bi-pc-display me-2"></i>5. Equipos Afectados</label>
+                      <div class="border rounded p-3 bg-white shadow-sm" style="max-height: 200px; overflow-y: auto;">
+                        <div class="form-check mb-2" v-for="eq in db.equipos" :key="eq.id_registro">
+                          <input class="form-check-input" type="checkbox" :value="eq.id_registro" v-model="formRes.id_equipo" :id="'chk_'+eq.id_registro">
+                          <label class="form-check-label w-100" :for="'chk_'+eq.id_registro" style="cursor: pointer;">
+                            <span class="fw-bold">{{ eq.id_registro }}</span> - {{ eq.marca }}
                           </label>
                         </div>
                       </div>
+                    </div>
 
-                      <div class="card-body bg-light p-2" style="max-height: 350px; overflow-y: auto;" v-if="formRes.incluir_ubicaciones && formRes.id_equipo.length > 0">
-                        <div class="alert alert-info py-2 small mb-2"><i class="bi bi-info-circle me-1"></i> Se creará un nuevo registro en el historial de ubicaciones para cada equipo.</div>
+                    <div class="mb-4">
+                      <label class="form-label fw-bold"><i class="bi bi-file-earmark-pdf me-2"></i>6. Documento Escaneado (PDF)</label>
+                      <div class="drag-drop-zone shadow-sm" @click="triggerFileInput">
+                        <div v-if="!formRes.fileName"><i class="bi bi-cloud-arrow-up display-6"></i><p class="mt-2 mb-0">Seleccionar PDF</p></div>
+                        <div v-else class="text-success"><i class="bi bi-check-circle-fill display-6"></i><p class="mt-2 mb-0 fw-bold">{{ formRes.fileName }}</p></div>
+                      </div>
+                      <input type="file" id="pdfUploader" accept="application/pdf" style="display: none;" @change="handleFileUpload">
+                    </div>
+                  </div>
 
-                        <div v-for="eqId in formRes.id_equipo" :key="eqId" class="border rounded p-3 mb-2 bg-white shadow-sm" style="border-left: 4px solid var(--antsv-primary) !important;">
-                          <div class="fw-bold mb-3" style="color: var(--antsv-dark);"><i class="bi bi-cpu me-1"></i> Equipo: {{ eqId }} - <span class="text-muted fw-normal">{{ getEquipoMarca(eqId) }}</span></div>
+                  <div class="col-12">
+                    <div class="card border-primary shadow-sm">
+                      <div class="card-header bg-primary bg-opacity-10 py-2">
+                        <div class="form-check form-switch mb-0">
+                          <input class="form-check-input" type="checkbox" id="switchUbis" v-model="formRes.incluir_ubicaciones">
+                          <label class="form-check-label fw-bold text-dark" for="switchUbis" style="cursor:pointer;">
+                            <i class="bi bi-geo-alt-fill me-1 text-primary"></i> 7. Asignar / Actualizar Ubicaciones Físicas
+                          </label>
+                        </div>
+                      </div>
+                      
+                      <div class="card-body bg-light" v-if="formRes.incluir_ubicaciones && formRes.id_equipo.length > 0">
+                        <div class="alert alert-info py-2 small mb-3">
+                          <i class="bi bi-info-circle me-1"></i> Defina el destino de los equipos seleccionados:
+                        </div>
+
+                        <div v-for="eqId in formRes.id_equipo" :key="eqId" class="border rounded p-3 mb-3 bg-white shadow-sm" style="border-left: 5px solid var(--antsv-green) !important;">
+                          <div class="fw-bold mb-2 text-dark">
+                            <i class="bi bi-cpu me-1"></i> Destino para: <span class="badge bg-dark">{{ eqId }}</span> - {{ getEquipoMarca(eqId) }}
+                          </div>
+                          
                           <div class="row g-2">
-                            <div class="col-md-6">
-                              <label class="small fw-bold text-muted">Departamento <span class="text-danger">*</span></label>
-                              <select class="form-select form-select-sm" v-model="formRes.ubicaciones_equipos[eqId].departamento">
+                            <div class="col-md-4">
+                              <label class="small fw-bold text-muted">Departamento *</label>
+                              <select class="form-select form-select-sm shadow-sm" v-model="formRes.ubicaciones_equipos[eqId].departamento">
                                 <option value="">Seleccione...</option>
                                 <option v-for="d in deptosList" :key="d.valor" :value="d.valor">{{ d.valor }}</option>
                               </select>
                             </div>
-                            <div class="col-md-6">
-                              <label class="small fw-bold text-muted">Distrito <span class="text-danger">*</span></label>
-                              <select class="form-select form-select-sm" v-model="formRes.ubicaciones_equipos[eqId].distrito" :disabled="!formRes.ubicaciones_equipos[eqId].departamento">
+                            <div class="col-md-4">
+                              <label class="small fw-bold text-muted">Distrito *</label>
+                              <select class="form-select form-select-sm shadow-sm" v-model="formRes.ubicaciones_equipos[eqId].distrito" :disabled="!formRes.ubicaciones_equipos[eqId].departamento">
                                 <option value="">Seleccione...</option>
                                 <option v-for="dis in getDistritosPorDepto(formRes.ubicaciones_equipos[eqId].departamento)" :key="dis.valor" :value="dis.valor">{{ dis.valor }}</option>
                               </select>
                             </div>
                             <div class="col-md-4">
-                              <label class="small fw-bold text-muted">Competencia</label>
-                              <select class="form-select form-select-sm" v-model="formRes.ubicaciones_equipos[eqId].competencia">
-                                <option value="Municipal">Municipal</option>
-                                <option value="Distrital">Distrital</option>
-                                <option value="Departamental">Departamental</option>
-                                <option value="Nacional">Nacional</option>
-                              </select>
-                            </div>
-                            <div class="col-md-8">
-                              <label class="small fw-bold text-muted">Lugar Específico <span class="text-danger">*</span></label>
-                              <input type="text" class="form-control form-control-sm" v-model="formRes.ubicaciones_equipos[eqId].lugar_especifico" placeholder="Ej: Clínica Central...">
+                              <label class="small fw-bold text-muted">Dirección / Lugar Específico *</label>
+                              <input type="text" class="form-control form-control-sm shadow-sm" v-model="formRes.ubicaciones_equipos[eqId].lugar_especifico" placeholder="Ej: Clínica Central...">
                             </div>
                           </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div class="d-grid mt-4">
-                      <button class="btn btn-primary btn-lg shadow" @click="submitResolucion" :disabled="!isFormResValid">
-                        <i class="bi bi-save me-2"></i>{{ isEditingRes ? 'Actualizar Resolución y Datos' : 'Subir y Registrar Resolución' }}
-                      </button>
+                      <div class="card-body text-center py-4 text-muted" v-else-if="formRes.incluir_ubicaciones && formRes.id_equipo.length === 0">
+                        <i class="bi bi-arrow-up-circle fs-2 d-block mb-2 opacity-50"></i>
+                        Debe seleccionar al menos un <strong>Equipo Afectado</strong> (Punto 5) para asignar ubicaciones.
+                      </div>
                     </div>
                   </div>
+                </div>
+
+                <div class="d-grid mt-5">
+                  <button class="btn btn-primary btn-lg shadow" @click="submitResolucion" :disabled="!isFormResValid">
+                    <i class="bi bi-save me-2"></i>Registrar Resolución y Actualizar Vigencias
+                  </button>
                 </div>
               </div>
             </div>
@@ -1058,14 +1081,31 @@
       // =====================================
       const isEditingRes = ref(false);
       const formRes = ref({
-        id_original: "", numero: "", anio: new Date().getFullYear(), id_equipo: [], tipo_acto: "1-Homologación", 
-        afecta: "", fileBase64: null, fileName: "", mimeType: "", incluir_ubicaciones: false, ubicaciones_equipos: {} 
+        id_original: "", 
+        numero: "", 
+        anio: new Date().getFullYear(), 
+        fecha_emision: "", // Nuevo
+        vencimiento: "",     // Nuevo
+        id_equipo: [], 
+        tipo_acto: "1-Homologación", 
+        afecta: "", 
+        fileBase64: null, 
+        fileName: "", 
+        mimeType: "", 
+        incluir_ubicaciones: false, 
+        ubicaciones_equipos: {} 
       });
 
       watch(() => formRes.value.id_equipo, (newEquipos) => {
         newEquipos.forEach(eqId => {
+          // Si el equipo seleccionado no tiene aún su objeto de ubicación, lo creamos
           if (!formRes.value.ubicaciones_equipos[eqId]) {
-            formRes.value.ubicaciones_equipos[eqId] = { departamento: "", distrito: "", competencia: "Distrital", lugar_especifico: "" };
+            formRes.value.ubicaciones_equipos[eqId] = { 
+              departamento: "", 
+              distrito: "", 
+              competencia: "Distrital", 
+              lugar_especifico: "" 
+            };
           }
         });
       }, { deep: true });

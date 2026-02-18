@@ -183,10 +183,9 @@ function processResolutionUpload(fileData, formData) {
     
     const eqData = sheetEq.getDataRange().getValues();
     const resData = sheetRes.getDataRange().getValues();
-    
-    const dEmi = new Date();
-    const fEmiStr = dEmi.toISOString().split('T')[0];
-    let fVenStr = "";
+
+    const fEmiStr = formData.fecha_emision;
+    const fVenStr = formData.vencimiento;    
 
     // LÓGICA DE VENCIMIENTOS
     if (formData.tipo_acto === "3-Cambio Ubicación") {
