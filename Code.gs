@@ -142,7 +142,30 @@ function getTableData(sheetName) {
   });
 }
 
-// ================= GESTOR DE RESOLUCIONES =================
+// ================= MOTOR DE SEGURIDAD BACKEND =================
+function requerirEditor(modulo) {
+  const email = Session.getActiveUser().getEmail();
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("APP_USUARIOS");
+  const data = sheet.getDataRange().getValues();
+  
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim().toLowerCase() === email.toLowerCase()) {
+      const rol = String(data[i][1]).trim().toUpperCase();
+      if (rol === "ADMIN") return true; // Administrador pasa directo
+      
+      try {
+        const permisos = JSON.parse(data[i][2]);
+        if (permisos.roles && permisos.roles.includes('Todos')) return true;
+        if (permisos[modulo] === 'Editor') return true;
+      } catch(e) {}
+      break;
+    }
+  }
+  
+  // Si llega hasta aquí, no es Editor ni Admin
+  throw new Error("ACCESO DENEGADO: No tienes permisos de Editor para el módulo " + modulo);
+}
+
 // ================= GESTOR DE RESOLUCIONES =================
 function processResolutionUpload(fileData, formData) {
   return runWithRetry(() => {
@@ -464,38 +487,4 @@ function deleteUsuarioTransaction(email) {
     throw new Error("Usuario no encontrado.");
   });
 }
-
-// =====================================
-  // CONTROL DE ACCESOS (PERMISOS GRANULARES)
-  // =====================================
-  const tienePermiso = (modulo) => {
-    // 1. El Administrador siempre tiene acceso absoluto a todo
-    if (role.value === 'ADMIN' || role.value === 'Admin') return true;
-    
-    // 2. Buscamos los datos del usuario actual
-    if (!db.value.usuarios || db.value.usuarios.length === 0) return false;
-    const user = db.value.usuarios.find(u => String(u.email).toLowerCase() === String(currentUser.value).toLowerCase());
-    if (!user) return false;
-
-    try {
-      const permisos = JSON.parse(user.permisos);
-      
-      // Soporte para tu formato VIEJO de Base de Datos (Ej: {"roles": ["Todos"]} o {"roles": ["Empresas"]})
-      if (permisos.roles && Array.isArray(permisos.roles)) {
-        if (permisos.roles.includes('Todos')) return true;
-        // *Nota: agregué "modulo + 'r'" porque en tu BD vi que guardaste "Equipos" como "Equiposr"
-        if (permisos.roles.includes(modulo) || permisos.roles.includes(modulo + 'r')) return true; 
-      }
-
-      // Soporte para el formato NUEVO Granular (Ej: {"Empresas": "Lector", "Equipos": "Ninguno"})
-      if (permisos[modulo] === 'Editor' || permisos[modulo] === 'Lector') {
-        return true;
-      }
-      
-    } catch (e) {
-      return false; // Si el JSON del usuario está roto, se bloquea por seguridad
-    }
-
-    return false;
-  };
 

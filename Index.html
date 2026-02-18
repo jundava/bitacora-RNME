@@ -151,42 +151,19 @@
 
         <div class="container-fluid px-4 pb-5">
 
-          <div v-if="role === 'PUBLIC'">
-            <div class="row mb-4">
-              <div class="col-md-8 mx-auto text-center">
-                <h2 style="color: var(--antsv-dark); font-weight: bold;"><i class="bi bi-shield-check me-2 text-success"></i>Verificador de Homologación</h2>
-                <p class="text-muted">Consulte la validez legal de los equipos psicofísicos del RNME.</p>
-                <div class="input-group input-group-lg mt-3 shadow-sm rounded">
-                  <span class="input-group-text bg-white border-0"><i class="bi bi-search text-muted"></i></span>
-                  <input type="text" class="form-control border-0" v-model="searchQuery" placeholder="Ingrese Serial del Equipo (Ej: ESP001)...">
-                  <button class="btn btn-primary px-4" @click="searchPublic">Buscar</button>
-                </div>
-              </div>
-            </div>
-            <div class="card">
-              <div class="card-body table-responsive">
-                <table class="table table-hover align-middle">
-                  <thead class="table-light">
-                    <tr><th>Registro</th><th>Marca</th><th>Ubicación Actual</th><th>Departamento</th><th>Estado</th></tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="ubi in db.ubicaciones" :key="ubi.id_ubicacion">
-                      <td><strong style="color: var(--antsv-dark);">{{ ubi.id_equipo }}</strong></td>
-                      <td>{{ getEquipoMarca(ubi.id_equipo) }}</td>
-                      <td><i class="bi bi-geo-alt me-1 text-muted"></i>{{ ubi.lugar_especifico }}</td>
-                      <td>{{ ubi.departamento }}</td>
-                      <td><span class="badge" style="background-color: var(--antsv-green);"><i class="bi bi-check-circle me-1"></i>Homologado y Activo</span></td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+          <div v-if="role === 'PUBLIC'" class="row mb-4 mt-5">
+            <div class="col-md-6 mx-auto text-center">
+              <i class="bi bi-shield-lock-fill text-danger mb-3" style="font-size: 5rem;"></i>
+              <h2 style="color: var(--antsv-dark); font-weight: bold;">Acceso Restringido</h2>
+              <p class="text-muted fs-5 mt-3">Este portal es de uso exclusivo para la administración interna de la ANTSV.</p>
+              <p class="text-muted">Si busca consultar la validez de un equipo, por favor diríjase al Verificador Público.</p>
             </div>
           </div>
 
           <div v-if="currentView === 'EMPRESAS'" class="card shadow-sm border-0">
             <div class="card-header d-flex justify-content-between align-items-center p-3">
               <h5 class="mb-0"><i class="bi bi-journal-bookmark me-2"></i>Directorio de Empresas</h5>
-              <button class="btn btn-primary btn-sm" @click="openEmpresaForm()" v-if="!showEmpresaForm">
+              <button class="btn btn-primary btn-sm" @click="openEmpresaForm()" v-if="!showEmpresaForm && esEditor('Empresas')">
                 <i class="bi bi-plus-circle me-1"></i> Nueva Empresa
               </button>
             </div>
@@ -220,7 +197,14 @@
               <div class="table-responsive" v-show="!showEmpresaForm">
                 <table class="table table-hover table-bordered align-middle">
                   <thead class="table-light text-center">
-                    <tr><th>ID</th><th>Razón Social</th><th>RUC</th><th>Email</th><th>Tipo Entidad</th><th>Acciones</th></tr>
+                    <tr>
+                      <th>ID</th>
+                      <th>Razón Social</th>
+                      <th>RUC</th>
+                      <th>Email</th>
+                      <th>Tipo Entidad</th>
+                      <th v-if="esEditor('Empresas')">Acciones</th>
+                    </tr>
                   </thead>
                   <tbody>
                     <tr v-for="emp in db.empresas" :key="emp.id_empresa">
@@ -229,12 +213,18 @@
                       <td class="text-center">{{ emp.ruc }}</td>
                       <td><i class="bi bi-envelope me-1 text-muted" v-if="emp.email"></i>{{ emp.email }}</td>
                       <td><span class="badge" style="background-color: var(--antsv-dark); color: var(--antsv-white);">{{ emp.tipo_entidad }}</span></td>
-                      <td class="text-center">
+                      
+                      <td class="text-center" v-if="esEditor('Empresas')">
                         <button class="btn btn-sm btn-outline-primary me-1" @click="openEmpresaForm(emp)" title="Editar"><i class="bi bi-pencil-square"></i></button>
                         <button class="btn btn-sm btn-outline-danger" @click="deleteEmpresa(emp.id_empresa, emp.razon_social)" title="Eliminar"><i class="bi bi-trash3"></i></button>
                       </td>
                     </tr>
-                    <tr v-if="db.empresas.length === 0"><td colspan="6" class="text-center text-muted"><i class="bi bi-info-circle me-1"></i>No hay empresas.</td></tr>
+                    
+                    <tr v-if="db.empresas.length === 0">
+                      <td :colspan="esEditor('Empresas') ? 6 : 5" class="text-center text-muted">
+                        <i class="bi bi-info-circle me-1"></i>No hay empresas registradas.
+                      </td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
@@ -247,11 +237,13 @@
                 <li class="nav-item">
                   <a class="nav-link rounded-top" :class="{active: activeResTab === 'LISTADO', 'text-dark': activeResTab === 'LISTADO', 'text-white': activeResTab !== 'LISTADO'}" href="#" @click.prevent="activeResTab = 'LISTADO'" style="border: none; border-bottom: 3px solid transparent;" :style="activeResTab === 'LISTADO' ? 'background-color: var(--antsv-white); font-weight: bold;' : ''"><i class="bi bi-list-ul me-1"></i> Listado de Resoluciones</a>
                 </li>
-                <li class="nav-item">
+                
+                <li class="nav-item" v-if="esEditor('Resoluciones')">
                   <a class="nav-link rounded-top" :class="{active: activeResTab === 'NUEVA', 'text-dark': activeResTab === 'NUEVA', 'text-white': activeResTab !== 'NUEVA'}" href="#" @click.prevent="activeResTab = 'NUEVA'" style="border: none; border-bottom: 3px solid transparent;" :style="activeResTab === 'NUEVA' ? 'background-color: var(--antsv-white); font-weight: bold;' : ''"><i class="bi bi-cloud-arrow-up me-1"></i> Subir Nueva</a>
                 </li>
               </ul>
             </div>
+            
             <div class="card-body">
               <div v-show="activeResTab === 'LISTADO'">
                 <div class="row g-2 mb-3 p-3 rounded" style="background-color: var(--antsv-light); border: 1px solid rgba(36, 63, 92, 0.1);">
@@ -314,7 +306,8 @@
                           <span class="badge" :class="res?.estado === 'Vigente' ? 'bg-success' : 'bg-danger'"><i :class="res?.estado === 'Vigente' ? 'bi bi-check-circle' : 'bi bi-x-circle'" class="me-1"></i>{{ res?.estado || 'Desconocido' }}</span>
                         </td>
                         <td class="text-center">
-                          <button v-if="role === 'ADMIN'" class="btn btn-sm btn-outline-primary ms-1" @click="openEditRes(res)" title="Editar Resolución"><i class="bi bi-pencil-square"></i></button>
+                          <button v-if="esEditor('Resoluciones')" class="btn btn-sm btn-outline-primary ms-1" @click="openEditRes(res)" title="Editar Resolución"><i class="bi bi-pencil-square"></i></button>
+                          
                           <a v-if="res.url_drive" :href="res.url_drive" target="_blank" class="btn btn-sm btn-outline-danger ms-1" title="Ver PDF"><i class="bi bi-file-earmark-pdf-fill"></i></a>
                           <span v-if="!res.url_drive" class="text-muted small ms-1"><i class="bi bi-dash"></i></span>
                         </td>
@@ -448,368 +441,386 @@
               </div>
             </div>
           </div>
-        </div>
 
-        <div v-if="currentView === 'EQUIPOS'" class="card shadow-sm border-0">
-          <div class="card-header d-flex justify-content-between align-items-center p-3">
-            <h5 class="mb-0"><i class="bi bi-pc-display me-2"></i>Gestión de Equipos Psicofísicos</h5>
-            <button class="btn btn-primary btn-sm" @click="openEquipoForm()" v-if="!showEquipoForm"><i class="bi bi-plus-circle me-1"></i> Registrar Equipo</button>
-          </div>
-          <div class="card-body">
-            <div v-if="showEquipoForm" class="card shadow-sm border-0 mb-4">
-              <div class="card-header bg-dark text-white py-3"><h5 class="mb-0 fw-bold"><i :class="isEditingEq ? 'bi bi-pencil-square' : 'bi bi-plus-circle'" class="me-2"></i>{{ isEditingEq ? 'Editar Equipo: ' + formEq.id_registro : 'Registrar Nuevo Equipo' }}</h5></div>
-              <div class="card-body p-4">
-                <form @submit.prevent="submitEquipo">
-                  <div class="row g-4">
-                    <div class="col-md-6">
-                      <h6 class="fw-bold text-muted mb-3 pb-2 border-bottom"><i class="bi bi-card-heading me-1"></i> Identificación y Propiedad</h6>
-                      <div class="mb-3" v-if="isEditingEq"><label class="form-label fw-bold"><i class="bi bi-upc-scan me-1 text-primary"></i>ID Registro</label><input type="text" class="form-control form-control-lg fw-bold text-uppercase font-monospace bg-light" v-model="formEq.id_registro" disabled></div>
-                      <div class="alert alert-info py-2" v-else><i class="bi bi-info-circle-fill me-2"></i>El ID de Registro se generará automáticamente al guardar.</div>
-                      <div class="mb-3">
-                        <label class="form-label fw-bold"><i class="bi bi-building me-1 text-primary"></i>Empresa Propietaria <span class="text-danger">*</span></label>
-                        <select class="form-select form-select-lg" v-model="formEq.id_empresa">
-                          <option value="" disabled>Seleccione una Empresa...</option>
-                          <option v-for="emp in db.empresas" :key="emp.id_empresa" :value="emp.id_empresa">{{ emp.razon_social }}</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div class="col-md-6">
-                      <h6 class="fw-bold text-muted mb-3 pb-2 border-bottom"><i class="bi bi-tools me-1"></i> Detalles Técnicos y Estado</h6>
-                      <div class="mb-3"><label class="form-label fw-bold"><i class="bi bi-tag me-1 text-primary"></i>Marca del Equipo <span class="text-danger">*</span></label><input type="text" class="form-control" v-model="formEq.marca" placeholder="Ej: Norklan, Smartest..."></div>
-                      <div class="row g-2 mb-3">
-                        <div class="col-6"><label class="form-label fw-bold small"><i class="bi bi-barcode me-1"></i>S. Psicométrico <span class="text-danger">*</span></label><input type="text" class="form-control form-control-sm" v-model="formEq.serial_psicometrico" placeholder="Ej: PYV..."></div>
-                        <div class="col-6"><label class="form-label fw-bold small"><i class="bi bi-barcode me-1"></i>S. Sensométrico <span class="text-danger">*</span></label><input type="text" class="form-control form-control-sm" v-model="formEq.serial_sensometrico" placeholder="Ej: PYG..."></div>
-                      </div>
-                      <div class="mb-3">
-                        <label class="form-label fw-bold d-flex justify-content-between align-items-center">
-                          <span><i class="bi bi-stoplights me-1 text-primary"></i>Estado</span>
-                          <span v-if="formEq.estado_homologacion" class="badge rounded-pill" :class="{'bg-success': formEq.estado_homologacion === 'Homologado', 'bg-danger': formEq.estado_homologacion === 'No Homologado'}">{{ formEq.estado_homologacion }}</span>
-                          <span v-else class="badge rounded-pill bg-secondary"><i class="bi bi-hourglass-split me-1"></i>Sin Homologar</span>
-                        </label>
-                        <select class="form-select bg-light" v-model="formEq.estado_homologacion" disabled>
-                          <option value="">En Blanco / Pendiente</option>
-                          <option v-for="est in estadosEquipoList" :key="est.id_catalogo" :value="est.valor">{{ est.valor }}</option>
-                        </select>
-                        <div class="form-text small text-muted"><i class="bi bi-shield-lock me-1"></i>Este estado se automatiza al subir una Resolución.</div>
-                      </div>
-                    </div>
-                    <div class="col-12">
-                      <label class="form-label fw-bold"><i class="bi bi-chat-left-text me-1 text-primary"></i>Observaciones / Notas Adicionales</label>
-                      <textarea class="form-control" v-model="formEq.descripcion" rows="3" placeholder="Ingrese cualquier nota relevante sobre el equipo, su estado o historial..."></textarea>
-                    </div>
-                  </div>
-                  <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
-                    <button type="button" class="btn btn-outline-secondary px-4" @click="showEquipoForm = false"><i class="bi bi-x-lg me-2"></i>Cancelar</button>
-                    <button type="submit" class="btn btn-success px-4 fw-bold" :disabled="!isFormEqValid"><i class="bi bi-check-lg me-2"></i>{{ isEditingEq ? 'Actualizar Equipo' : 'Guardar Nuevo Equipo' }}</button>
-                  </div>
-                </form>
-              </div>
+          <div v-if="currentView === 'EQUIPOS'" class="card shadow-sm border-0">
+            <div class="card-header d-flex justify-content-between align-items-center p-3">
+              <h5 class="mb-0"><i class="bi bi-pc-display me-2"></i>Gestión de Equipos Psicofísicos</h5>
+              <button class="btn btn-primary btn-sm" @click="openEquipoForm()" v-if="!showEquipoForm && esEditor('Equipos')">
+                <i class="bi bi-plus-circle me-1"></i> Registrar Equipo
+              </button>
             </div>
-
-            <div v-show="!showEquipoForm">
-              <div class="row g-2 mb-3 p-3 rounded" style="background-color: var(--antsv-light); border: 1px solid rgba(36, 63, 92, 0.1);">
-                <div class="col-md-4"><div class="input-group input-group-sm"><span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span><input type="text" class="form-control" v-model="searchEq" placeholder="Buscar ID, Marca o Seriales..."></div></div>
-                <div class="col-md-4"><select class="form-select form-select-sm" v-model="filterEmpresaEq"><option value="">🏢 Todas las Empresas</option><option v-for="emp in db.empresas" :key="emp.id_empresa" :value="emp.id_empresa">{{ emp.razon_social }}</option></select></div>
-                <div class="col-md-4"><select class="form-select form-select-sm" v-model="filterEstadoEq"><option value="">🟢/🔴 Todos los Estados</option><option v-for="est in estadosEquipoList" :key="est.id_catalogo" :value="est.valor">{{ est.valor }}</option></select></div>
-              </div>
-              <div class="table-responsive">
-                <table class="table table-hover table-bordered align-middle shadow-sm">
-                  <thead class="table-light text-center">
-                    <tr><th>ID Registro</th><th>Empresa</th><th>Marca</th><th>Componentes</th><th>Estado</th><th>Acciones</th></tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="eq in filteredEquipos" :key="eq.id_registro">
-                      <td class="text-center fw-bold" style="color: var(--antsv-dark);">{{ eq.id_registro }}</td>
-                      <td>{{ getEmpresaNombre(eq.id_empresa) }}</td>
-                      <td class="text-center">{{ eq.marca }}</td>
-                      <td class="align-middle text-nowrap">
-                        <div class="small text-start">
-                          <div class="mb-1"><span class="fw-bold" style="color: var(--antsv-dark);">Nro. Serie Psicométrico: </span> <span class="text-muted">{{ eq['serial_psicométrico'] || eq.serial_psicometrico || 'N/A' }}</span></div>
-                          <div><span class="fw-bold" style="color: var(--antsv-dark);">Nro. Serie Sensométrico: </span> <span class="text-muted">{{ eq['serial_sensométrico'] || eq.serial_sensometrico || 'N/A' }}</span></div>
-                        </div>
-                      </td>
-                      <td class="text-center">
-                        <span class="badge" :class="{'bg-success': eq.estado_homologacion === 'Homologado', 'bg-danger': eq.estado_homologacion === 'No Homologado'}"><i class="me-1" :class="{'bi-check-circle': eq.estado_homologacion === 'Homologado', 'bi-x-circle': eq.estado_homologacion === 'No Homologado'}"></i>{{ eq.estado_homologacion }}</span>
-                      </td>
-                      <td class="text-center">
-                        <button class="btn btn-sm btn-outline-primary me-1" @click="openEquipoForm(eq)" title="Editar"><i class="bi bi-pencil-square"></i></button>
-                        <button class="btn btn-sm btn-outline-danger" @click="deleteEquipo(eq.id_registro)" title="Eliminar"><i class="bi bi-trash3"></i></button>
-                      </td>
-                    </tr>
-                    <tr v-if="filteredEquipos.length === 0"><td colspan="6" class="text-center p-5 text-muted"><i class="bi bi-search display-6 d-block mb-3 opacity-50"></i>No se encontraron equipos.</td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="currentView === 'UBICACIONES'" class="card shadow-sm border-0">
-          <div class="card-header d-flex justify-content-between align-items-center p-3">
-            <h5 class="mb-0"><i class="bi bi-pin-map me-2"></i>Historial de Ubicaciones</h5>
-            <button class="btn btn-primary btn-sm" @click="openUbiForm()" v-if="!showUbiForm"><i class="bi bi-geo-fill me-1"></i> Asignar Nueva Ubicación</button>
-          </div>
-          <div class="card-body">
-            <div v-if="showUbiForm" class="p-4 rounded mb-4 shadow-sm" style="background-color: rgba(36, 63, 92, 0.03); border: 1px solid var(--antsv-light);">
-              <h5 class="mb-4 fw-bold" style="color: var(--antsv-green); border-bottom: 2px solid var(--antsv-green); display: inline-block;">Registrar Movimiento de Equipo</h5>
-              <div class="row g-3">
-                <div class="col-md-4"><label class="form-label fw-bold">Equipo a Ubicar <span class="text-danger">*</span></label><select class="form-select" v-model="formUbi.id_equipo"><option v-for="eq in db.equipos" :value="eq.id_registro">{{ eq.id_registro }} - {{ eq.marca }}</option></select></div>
-                <div class="col-md-4"><label class="form-label fw-bold">Departamento <span class="text-danger">*</span></label><select class="form-select" v-model="formUbi.departamento"><option value="">Seleccione...</option><option v-for="d in deptosList" :value="d.valor">{{ d.valor }}</option></select></div>
-                <div class="col-md-4"><label class="form-label fw-bold">Distrito <span class="text-danger">*</span></label><select class="form-select" v-model="formUbi.distrito" :disabled="!formUbi.departamento"><option value="">Seleccione Distrito...</option><option v-for="dis in distritosFiltrados" :value="dis.valor">{{ dis.valor }}</option></select></div>
-                <div class="col-md-4">
-                  <label class="form-label fw-bold">Nivel de Competencia</label>
-                  <select class="form-select" v-model="formUbi.competencia">
-                    <option value="Municipal">Municipal</option><option value="Distrital">Distrital</option><option value="Departamental">Departamental</option><option value="Nacional">Nacional</option>
-                  </select>
-                </div>
-                <div class="col-md-8"><label class="form-label fw-bold">Lugar Específico / Dirección <span class="text-danger">*</span></label><input type="text" class="form-control" v-model="formUbi.lugar_especifico" placeholder="Ej: Municipalidad de... o Clínica..."></div>
-              </div>
-              <div class="mt-4 text-end">
-                <button class="btn btn-outline-secondary me-2" @click="showUbiForm = false">Cancelar</button>
-                <button class="btn btn-primary px-4" @click="submitUbi" :disabled="!isFormUbiValid"><i class="bi bi-save me-1"></i> Confirmar Ubicación Activa</button>
-              </div>
-            </div>
-
-            <div v-show="!showUbiForm">
-              <div class="row g-2 mb-3 p-3 rounded" style="background-color: var(--antsv-light); border: 1px solid rgba(36, 63, 92, 0.1);">
-                <div class="col-md-3"><div class="input-group input-group-sm"><span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span><input type="text" class="form-control" v-model="searchUbi" placeholder="Buscar serial, marca, ciudad..."></div></div>
-                <div class="col-md-3"><select class="form-select form-select-sm" v-model="filterEmpresaUbi"><option value="">🏢 Todas las Empresas</option><option v-for="emp in db.empresas" :key="emp.id_empresa" :value="emp.id_empresa">{{ emp.razon_social }}</option></select></div>
-                <div class="col-md-3"><select class="form-select form-select-sm" v-model="filterDepartamentoUbi"><option value="">📍 Todos los Departamentos</option><option v-for="d in deptosList" :key="d.valor" :value="d.valor">{{ d.valor }}</option></select></div>
-                <div class="col-md-3"><select class="form-select form-select-sm" v-model="filterEstadoUbi"><option value="">🟢/⚪ Todos los Estados (Historial)</option><option value="Activo">🟢 Solo Ubicaciones Activas</option><option value="Histórico">⚪ Solo Histórico Anterior</option></select></div>
-              </div>
-              <div class="table-responsive">
-                <table class="table table-hover align-middle border shadow-sm">
-                  <thead class="table-light">
-                    <tr>
-                      <th>Equipo / Marca</th>
-                      <th>Ubicación Geográfica</th>
-                      <th>Nivel / Dirección</th>
-                      <th>Estado</th>
-                      <th class="text-center">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="u in filteredUbicaciones" :key="u.id_ubicacion" :class="{'table-info': u.estado_actual === 'Activo'}">
-                      <td>
-                        <div class="fw-bold" style="color: var(--antsv-dark); font-size: 1.1rem;"><i class="bi bi-cpu me-1"></i> {{ u.id_equipo }}</div>
-                        <div class="mt-1" style="font-size: 0.85rem;">
-                          <div class="mb-1"><span class="fw-bold text-uppercase" style="color: var(--antsv-dark); font-size: 0.75rem;">Marca:</span> <span class="text-muted">{{ getEquipoMarca(u.id_equipo) }}</span></div>
-                          <div><span class="fw-bold text-uppercase" style="color: var(--antsv-dark); font-size: 0.75rem;">Propietario:</span> <span class="text-muted">{{ getEquipoEmpresa(u.id_equipo) }}</span></div>
-                        </div>
-                      </td>
-                      <td>
-                        <div class="d-flex align-items-center">
-                          <i class="bi bi-geo-alt-fill text-danger me-2 fs-5"></i>
-                          <div>
-                            <div class="fw-bold">{{ u.departamento }}</div>
-                            <div class="small text-muted">{{ u.distrito }}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td>
-                        <div class="badge mb-1" style="background-color: transparent; border: 1px solid var(--antsv-dark); color: var(--antsv-dark);">{{ u.competencia }}</div>
-                        <div class="small">{{ u.lugar_especifico }}</div>
-                      </td>
-                      <td>
-                        <span class="badge" :class="u.estado_actual === 'Activo' ? 'bg-success' : 'bg-secondary'"><i :class="u.estado_actual === 'Activo' ? 'bi bi-check-circle' : 'bi bi-clock-history'" class="me-1"></i>{{ u.estado_actual }}</span>
-                      </td>
-                      <td class="text-center">
-                        <button class="btn btn-sm btn-outline-secondary" @click="viewUbiDetails(u)" title="Ver Detalles"><i class="bi bi-eye"></i></button>
-                      </td>
-                    </tr>
-                    <tr v-if="filteredUbicaciones.length === 0">
-                      <td colspan="5" class="text-center p-5 text-muted"><i class="bi bi-search display-6 d-block mb-3 opacity-50"></i>No se encontraron ubicaciones con los filtros actuales.</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="currentView === 'CONFIGURACION'" class="card shadow-sm border-0">
-          <div class="card-header p-0" style="background-color: var(--antsv-dark); border-radius: 10px 10px 0 0;">
-            <ul class="nav nav-tabs px-3 pt-3" style="border-bottom: none;">
-              <li class="nav-item">
-                <a class="nav-link rounded-top" :class="{active: activeConfigTab === 'PARAMETROS', 'text-dark fw-bold': activeConfigTab === 'PARAMETROS', 'text-white': activeConfigTab !== 'PARAMETROS'}" href="#" @click.prevent="activeConfigTab = 'PARAMETROS'" style="border: none; border-bottom: 3px solid transparent;" :style="activeConfigTab === 'PARAMETROS' ? 'background-color: var(--antsv-white);' : ''">
-                  <i class="bi bi-gear-fill me-1"></i> Parámetros del Sistema
-                </a>
-              </li>
-              <li class="nav-item" v-if="role === 'ADMIN'">
-                <a class="nav-link rounded-top" :class="{active: activeConfigTab === 'USUARIOS', 'text-dark fw-bold': activeConfigTab === 'USUARIOS', 'text-white': activeConfigTab !== 'USUARIOS'}" href="#" @click.prevent="activeConfigTab = 'USUARIOS'" style="border: none; border-bottom: 3px solid transparent;" :style="activeConfigTab === 'USUARIOS' ? 'background-color: var(--antsv-white);' : ''">
-                  <i class="bi bi-people-fill me-1"></i> Accesos y Usuarios
-                </a>
-              </li>
-            </ul>
-          </div>
-
-          <div class="card-body bg-light p-4">
-
-            <div v-show="activeConfigTab === 'PARAMETROS'">
-              <div class="d-flex justify-content-end mb-3">
-                <button class="btn btn-warning btn-sm fw-bold shadow-sm" @click="toggleEditConfig" v-if="!isEditingConfig"><i class="bi bi-pencil-square me-1"></i> Habilitar Edición</button>
-              </div>
-              <div class="alert alert-warning border-warning shadow-sm mb-4" v-if="isEditingConfig">
-                <i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i> <strong>Modo Edición Activado:</strong> Modificar estos valores alterará el funcionamiento global.
-              </div>
-
-              <div class="card border-0 shadow-sm">
-                <div class="table-responsive">
-                  <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light">
-                      <tr>
-                        <th style="width: 25%;"><i class="bi bi-key me-1"></i> Parámetro (Clave)</th>
-                        <th style="width: 45%;">Valor de Configuración</th>
-                        <th style="width: 30%;">Descripción / Efecto</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="item in (isEditingConfig ? formConfig : db.configuracion_raw)" :key="item.clave">
-                        <td class="fw-bold" style="color: var(--antsv-dark); font-family: monospace;">{{ item.clave }}</td>
-                        <td>
-                          <div v-if="!isEditingConfig">
-                            <span v-if="item.valor === 'True'" class="badge bg-success px-3 py-2"><i class="bi bi-toggle-on me-1"></i>Activado</span>
-                            <span v-else-if="item.valor === 'False'" class="badge bg-danger px-3 py-2"><i class="bi bi-toggle-off me-1"></i>Desactivado</span>
-                            <div v-else class="text-break bg-light border rounded p-2 small">{{ item.valor }}</div>
-                          </div>
-                          <div v-else>
-                            <select v-if="item.valor === 'True' || item.valor === 'False'" class="form-select shadow-sm" v-model="item.valor">
-                              <option value="True">Activado</option>
-                              <option value="False">Desactivado</option>
-                            </select>
-                            <textarea v-else class="form-control shadow-sm" v-model="item.valor" rows="2"></textarea>
-                          </div>
-                        </td>
-                        <td class="small text-muted border-start">{{ item.descripcion }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              <div class="d-flex justify-content-end gap-2 mt-4" v-if="isEditingConfig">
-                <button class="btn btn-outline-secondary px-4" @click="isEditingConfig = false"><i class="bi bi-x-circle me-1"></i> Cancelar</button>
-                <button class="btn btn-success px-4 fw-bold shadow" @click="submitConfig"><i class="bi bi-save me-1"></i> Guardar Cambios</button>
-              </div>
-            </div>
-
-            <div v-show="activeConfigTab === 'USUARIOS'">
-              <div v-if="!showUserForm">
-                <div class="d-flex justify-content-end mb-3">
-                  <button class="btn btn-primary fw-bold shadow-sm" @click="openUserForm()"><i class="bi bi-person-plus-fill me-1"></i> Nuevo Usuario</button>
-                </div>
-                <div class="card border-0 shadow-sm table-responsive">
-                  <table class="table table-hover align-middle text-center mb-0">
-                    <thead class="table-light">
-                      <tr>
-                        <th>Avatar</th>
-                        <th>Correo Gmail</th>
-                        <th>Rol / Perfil</th>
-                        <th>Estado</th>
-                        <th>Último Acceso</th>
-                        <th>Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="usr in db.usuarios" :key="usr.email">
-                        <td>
-                          <img v-if="usr.avatar" :src="usr.avatar" alt="avatar" class="rounded-circle border" style="width: 40px; height: 40px; object-fit: cover;">
-                          <i v-else class="bi bi-person-circle fs-2 text-muted"></i>
-                        </td>
-                        <td class="fw-bold">{{ usr.email }}</td>
-                        <td><span class="badge border text-dark" style="background-color: var(--antsv-light);">{{ usr.rol }}</span></td>
-                        <td><span class="badge" :class="usr.estado === 'ACTIVO' ? 'bg-success' : 'bg-danger'">{{ usr.estado }}</span></td>
-                        <td class="small text-muted">{{ usr.ultimo_acceso ? new Date(usr.ultimo_acceso).toLocaleString() : 'Nunca' }}</td>
-                        <td>
-                          <button class="btn btn-sm btn-outline-primary me-1" @click="openUserForm(usr)" title="Editar Permisos"><i class="bi bi-key-fill"></i></button>
-                          <button class="btn btn-sm btn-outline-danger" @click="deleteUser(usr.email)" title="Eliminar"><i class="bi bi-trash3"></i></button>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div v-if="showUserForm" class="card shadow-sm border-0">
-                <div class="card-header bg-white border-bottom py-3">
-                  <h5 class="mb-0 fw-bold" style="color: var(--antsv-dark);"><i class="bi bi-person-badge me-2 text-primary"></i>{{ isEditingUser ? 'Editar Permisos de: ' + formUser.email : 'Nuevo Perfil de Acceso' }}</h5>
-                </div>
+            <div class="card-body">
+              <div v-if="showEquipoForm" class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-dark text-white py-3"><h5 class="mb-0 fw-bold"><i :class="isEditingEq ? 'bi bi-pencil-square' : 'bi bi-plus-circle'" class="me-2"></i>{{ isEditingEq ? 'Editar Equipo: ' + formEq.id_registro : 'Registrar Nuevo Equipo' }}</h5></div>
                 <div class="card-body p-4">
-                  <div class="row g-4">
-
-                    <div class="col-md-5 border-end">
-                      <h6 class="fw-bold mb-3 text-muted"><i class="bi bi-info-circle me-1"></i> Datos Principales</h6>
-
-                      <div class="mb-3">
-                        <label class="form-label fw-bold small">Cuenta de Google (Email) <span class="text-danger">*</span></label>
-                        <input type="email" class="form-control" v-model="formUser.email" :disabled="isEditingUser" placeholder="ejemplo@antsv.gov.py">
-                      </div>
-
-                      <div class="row g-2 mb-3">
-                        <div class="col-6">
-                          <label class="form-label fw-bold small">Rol Lógico</label>
-                          <select class="form-select" v-model="formUser.rol">
-                            <option value="Admin">Administrador</option>
-                            <option value="Operador">Operador</option>
-                          </select>
-                        </div>
-                        <div class="col-6">
-                          <label class="form-label fw-bold small">Estado</label>
-                          <select class="form-select" v-model="formUser.estado">
-                            <option value="ACTIVO">Activo</option>
-                            <option value="INACTIVO">Inactivo / Bloqueado</option>
+                  <form @submit.prevent="submitEquipo">
+                    <div class="row g-4">
+                      <div class="col-md-6">
+                        <h6 class="fw-bold text-muted mb-3 pb-2 border-bottom"><i class="bi bi-card-heading me-1"></i> Identificación y Propiedad</h6>
+                        <div class="mb-3" v-if="isEditingEq"><label class="form-label fw-bold"><i class="bi bi-upc-scan me-1 text-primary"></i>ID Registro</label><input type="text" class="form-control form-control-lg fw-bold text-uppercase font-monospace bg-light" v-model="formEq.id_registro" disabled></div>
+                        <div class="alert alert-info py-2" v-else><i class="bi bi-info-circle-fill me-2"></i>El ID de Registro se generará automáticamente al guardar.</div>
+                        <div class="mb-3">
+                          <label class="form-label fw-bold"><i class="bi bi-building me-1 text-primary"></i>Empresa Propietaria <span class="text-danger">*</span></label>
+                          <select class="form-select form-select-lg" v-model="formEq.id_empresa">
+                            <option value="" disabled>Seleccione una Empresa...</option>
+                            <option v-for="emp in db.empresas" :key="emp.id_empresa" :value="emp.id_empresa">{{ emp.razon_social }}</option>
                           </select>
                         </div>
                       </div>
-
-                      <div class="mb-3">
-                        <label class="form-label fw-bold small">Avatar / Foto de Perfil</label>
-                        <div class="d-flex align-items-center gap-2">
-                          <img v-if="formUser.avatar" :src="formUser.avatar" class="rounded-circle border" style="width: 45px; height: 45px;">
-                          <i v-else class="bi bi-person-circle fs-1 text-muted"></i>
-                          <input type="text" class="form-control form-control-sm" v-model="formUser.avatar" placeholder="URL de la imagen...">
-                          <button class="btn btn-outline-secondary btn-sm" @click="generateAvatar" title="Generar Automático"><i class="bi bi-magic"></i></button>
+                      <div class="col-md-6">
+                        <h6 class="fw-bold text-muted mb-3 pb-2 border-bottom"><i class="bi bi-tools me-1"></i> Detalles Técnicos y Estado</h6>
+                        <div class="mb-3"><label class="form-label fw-bold"><i class="bi bi-tag me-1 text-primary"></i>Marca del Equipo <span class="text-danger">*</span></label><input type="text" class="form-control" v-model="formEq.marca" placeholder="Ej: Norklan, Smartest..."></div>
+                        <div class="row g-2 mb-3">
+                          <div class="col-6"><label class="form-label fw-bold small"><i class="bi bi-barcode me-1"></i>S. Psicométrico <span class="text-danger">*</span></label><input type="text" class="form-control form-control-sm" v-model="formEq.serial_psicometrico" placeholder="Ej: PYV..."></div>
+                          <div class="col-6"><label class="form-label fw-bold small"><i class="bi bi-barcode me-1"></i>S. Sensométrico <span class="text-danger">*</span></label><input type="text" class="form-control form-control-sm" v-model="formEq.serial_sensometrico" placeholder="Ej: PYG..."></div>
+                        </div>
+                        <div class="mb-3">
+                          <label class="form-label fw-bold d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-stoplights me-1 text-primary"></i>Estado</span>
+                            <span v-if="formEq.estado_homologacion" class="badge rounded-pill" :class="{'bg-success': formEq.estado_homologacion === 'Homologado', 'bg-danger': formEq.estado_homologacion === 'No Homologado'}">{{ formEq.estado_homologacion }}</span>
+                            <span v-else class="badge rounded-pill bg-secondary"><i class="bi bi-hourglass-split me-1"></i>Sin Homologar</span>
+                          </label>
+                          <select class="form-select bg-light" v-model="formEq.estado_homologacion" disabled>
+                            <option value="">En Blanco / Pendiente</option>
+                            <option v-for="est in estadosEquipoList" :key="est.id_catalogo" :value="est.valor">{{ est.valor }}</option>
+                          </select>
+                          <div class="form-text small text-muted"><i class="bi bi-shield-lock me-1"></i>Este estado se automatiza al subir una Resolución.</div>
                         </div>
                       </div>
-                    </div>
-
-                    <div class="col-md-7">
-                      <h6 class="fw-bold mb-3 text-muted"><i class="bi bi-shield-lock me-1"></i> Matriz de Accesos por Módulo</h6>
-                      <div class="table-responsive border rounded bg-white">
-                        <table class="table table-sm table-hover align-middle mb-0">
-                          <thead class="table-light">
-                            <tr>
-                              <th>Módulo del Sistema</th>
-                              <th class="text-center">Nivel de Acceso Otorgado</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <tr v-for="mod in modulosDisponibles" :key="mod">
-                              <td class="fw-bold text-muted px-3"><i class="bi bi-folder2-open me-2"></i>{{ mod }}</td>
-                              <td class="text-center p-2">
-                                <select class="form-select form-select-sm shadow-sm border-0 bg-light" v-model="formUser.permisos[mod]" :class="{'text-success fw-bold': formUser.permisos[mod]==='Editor', 'text-primary fw-bold': formUser.permisos[mod]==='Lector', 'text-danger': formUser.permisos[mod]==='Ninguno'}">
-                                  <option value="Ninguno">❌ Sin Acceso</option>
-                                  <option value="Lector">👁️ Lector (Solo Ver)</option>
-                                  <option value="Editor">✍️ Editor (Crear/Modificar)</option>
-                                </select>
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
+                      <div class="col-12">
+                        <label class="form-label fw-bold"><i class="bi bi-chat-left-text me-1 text-primary"></i>Observaciones / Notas Adicionales</label>
+                        <textarea class="form-control" v-model="formEq.descripcion" rows="3" placeholder="Ingrese cualquier nota relevante sobre el equipo, su estado o historial..."></textarea>
                       </div>
-                      <div class="alert alert-info mt-3 small py-2"><i class="bi bi-info-circle-fill me-1"></i><strong>Nota:</strong> Los usuarios "Admin" ignoran estas restricciones y tienen control total.</div>
                     </div>
-                  </div>
-
-                  <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
-                    <button class="btn btn-outline-secondary px-4" @click="showUserForm = false"><i class="bi bi-x-circle me-1"></i> Cancelar</button>
-                    <button class="btn btn-primary px-4 fw-bold shadow" @click="submitUser" :disabled="!isFormUserValid"><i class="bi bi-check-circle me-1"></i> Guardar Credenciales</button>
-                  </div>
+                    <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
+                      <button type="button" class="btn btn-outline-secondary px-4" @click="showEquipoForm = false"><i class="bi bi-x-lg me-2"></i>Cancelar</button>
+                      <button type="submit" class="btn btn-success px-4 fw-bold" :disabled="!isFormEqValid"><i class="bi bi-check-lg me-2"></i>{{ isEditingEq ? 'Actualizar Equipo' : 'Guardar Nuevo Equipo' }}</button>
+                    </div>
+                  </form>
                 </div>
               </div>
 
+              <div v-show="!showEquipoForm">
+                <div class="row g-2 mb-3 p-3 rounded" style="background-color: var(--antsv-light); border: 1px solid rgba(36, 63, 92, 0.1);">
+                  <div class="col-md-4"><div class="input-group input-group-sm"><span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span><input type="text" class="form-control" v-model="searchEq" placeholder="Buscar ID, Marca o Seriales..."></div></div>
+                  <div class="col-md-4"><select class="form-select form-select-sm" v-model="filterEmpresaEq"><option value="">🏢 Todas las Empresas</option><option v-for="emp in db.empresas" :key="emp.id_empresa" :value="emp.id_empresa">{{ emp.razon_social }}</option></select></div>
+                  <div class="col-md-4"><select class="form-select form-select-sm" v-model="filterEstadoEq"><option value="">🟢/🔴 Todos los Estados</option><option v-for="est in estadosEquipoList" :key="est.id_catalogo" :value="est.valor">{{ est.valor }}</option></select></div>
+                </div>
+                <div class="table-responsive">
+                  <table class="table table-hover table-bordered align-middle shadow-sm">
+                    <thead class="table-light text-center">
+                      <tr>
+                        <th>ID Registro</th>
+                        <th>Empresa</th>
+                        <th>Marca</th>
+                        <th>Componentes</th>
+                        <th>Estado</th>
+                        <th v-if="esEditor('Equipos')">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="eq in filteredEquipos" :key="eq.id_registro">
+                        <td class="text-center fw-bold" style="color: var(--antsv-dark);">{{ eq.id_registro }}</td>
+                        <td>{{ getEmpresaNombre(eq.id_empresa) }}</td>
+                        <td class="text-center">{{ eq.marca }}</td>
+                        <td class="align-middle text-nowrap">
+                          <div class="small text-start">
+                            <div class="mb-1"><span class="fw-bold" style="color: var(--antsv-dark);">Nro. Serie Psicométrico: </span> <span class="text-muted">{{ eq['serial_psicométrico'] || eq.serial_psicometrico || 'N/A' }}</span></div>
+                            <div><span class="fw-bold" style="color: var(--antsv-dark);">Nro. Serie Sensométrico: </span> <span class="text-muted">{{ eq['serial_sensométrico'] || eq.serial_sensometrico || 'N/A' }}</span></div>
+                          </div>
+                        </td>
+                        <td class="text-center">
+                          <span class="badge" :class="{'bg-success': eq.estado_homologacion === 'Homologado', 'bg-danger': eq.estado_homologacion === 'No Homologado'}"><i class="me-1" :class="{'bi-check-circle': eq.estado_homologacion === 'Homologado', 'bi-x-circle': eq.estado_homologacion === 'No Homologado'}"></i>{{ eq.estado_homologacion }}</span>
+                        </td>
+                        
+                        <td class="text-center" v-if="esEditor('Equipos')">
+                          <button class="btn btn-sm btn-outline-primary me-1" @click="openEquipoForm(eq)" title="Editar"><i class="bi bi-pencil-square"></i></button>
+                          <button class="btn btn-sm btn-outline-danger" @click="deleteEquipo(eq.id_registro)" title="Eliminar"><i class="bi bi-trash3"></i></button>
+                        </td>
+                      </tr>
+                      
+                      <tr v-if="filteredEquipos.length === 0">
+                        <td :colspan="esEditor('Equipos') ? 6 : 5" class="text-center p-5 text-muted">
+                          <i class="bi bi-search display-6 d-block mb-3 opacity-50"></i>No se encontraron equipos.
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+
+          <div v-if="currentView === 'UBICACIONES'" class="card shadow-sm border-0">
+            <div class="card-header d-flex justify-content-between align-items-center p-3">
+              <h5 class="mb-0"><i class="bi bi-pin-map me-2"></i>Historial de Ubicaciones</h5>
+              <button class="btn btn-primary btn-sm" @click="openUbiForm()" v-if="!showUbiForm && esEditor('Ubicaciones')">
+                <i class="bi bi-geo-fill me-1"></i> Asignar Nueva Ubicación
+              </button>
+            </div>
+            <div class="card-body">
+              <div v-if="showUbiForm" class="p-4 rounded mb-4 shadow-sm" style="background-color: rgba(36, 63, 92, 0.03); border: 1px solid var(--antsv-light);">
+                <h5 class="mb-4 fw-bold" style="color: var(--antsv-green); border-bottom: 2px solid var(--antsv-green); display: inline-block;">Registrar Movimiento de Equipo</h5>
+                <div class="row g-3">
+                  <div class="col-md-4"><label class="form-label fw-bold">Equipo a Ubicar <span class="text-danger">*</span></label><select class="form-select" v-model="formUbi.id_equipo"><option v-for="eq in db.equipos" :value="eq.id_registro">{{ eq.id_registro }} - {{ eq.marca }}</option></select></div>
+                  <div class="col-md-4"><label class="form-label fw-bold">Departamento <span class="text-danger">*</span></label><select class="form-select" v-model="formUbi.departamento"><option value="">Seleccione...</option><option v-for="d in deptosList" :value="d.valor">{{ d.valor }}</option></select></div>
+                  <div class="col-md-4"><label class="form-label fw-bold">Distrito <span class="text-danger">*</span></label><select class="form-select" v-model="formUbi.distrito" :disabled="!formUbi.departamento"><option value="">Seleccione Distrito...</option><option v-for="dis in distritosFiltrados" :value="dis.valor">{{ dis.valor }}</option></select></div>
+                  <div class="col-md-4">
+                    <label class="form-label fw-bold">Nivel de Competencia</label>
+                    <select class="form-select" v-model="formUbi.competencia">
+                      <option value="Municipal">Municipal</option><option value="Distrital">Distrital</option><option value="Departamental">Departamental</option><option value="Nacional">Nacional</option>
+                    </select>
+                  </div>
+                  <div class="col-md-8"><label class="form-label fw-bold">Lugar Específico / Dirección <span class="text-danger">*</span></label><input type="text" class="form-control" v-model="formUbi.lugar_especifico" placeholder="Ej: Municipalidad de... o Clínica..."></div>
+                </div>
+                <div class="mt-4 text-end">
+                  <button class="btn btn-outline-secondary me-2" @click="showUbiForm = false">Cancelar</button>
+                  <button class="btn btn-primary px-4" @click="submitUbi" :disabled="!isFormUbiValid"><i class="bi bi-save me-1"></i> Confirmar Ubicación Activa</button>
+                </div>
+              </div>
+
+              <div v-show="!showUbiForm">
+                <div class="row g-2 mb-3 p-3 rounded" style="background-color: var(--antsv-light); border: 1px solid rgba(36, 63, 92, 0.1);">
+                  <div class="col-md-3"><div class="input-group input-group-sm"><span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span><input type="text" class="form-control" v-model="searchUbi" placeholder="Buscar serial, marca, ciudad..."></div></div>
+                  <div class="col-md-3"><select class="form-select form-select-sm" v-model="filterEmpresaUbi"><option value="">🏢 Todas las Empresas</option><option v-for="emp in db.empresas" :key="emp.id_empresa" :value="emp.id_empresa">{{ emp.razon_social }}</option></select></div>
+                  <div class="col-md-3"><select class="form-select form-select-sm" v-model="filterDepartamentoUbi"><option value="">📍 Todos los Departamentos</option><option v-for="d in deptosList" :key="d.valor" :value="d.valor">{{ d.valor }}</option></select></div>
+                  <div class="col-md-3"><select class="form-select form-select-sm" v-model="filterEstadoUbi"><option value="">🟢/⚪ Todos los Estados (Historial)</option><option value="Activo">🟢 Solo Ubicaciones Activas</option><option value="Histórico">⚪ Solo Histórico Anterior</option></select></div>
+                </div>
+                <div class="table-responsive">
+                  <table class="table table-hover align-middle border shadow-sm">
+                    <thead class="table-light">
+                      <tr>
+                        <th>Equipo / Marca</th>
+                        <th>Ubicación Geográfica</th>
+                        <th>Nivel / Dirección</th>
+                        <th>Estado</th>
+                        <th class="text-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="u in filteredUbicaciones" :key="u.id_ubicacion" :class="{'table-info': u.estado_actual === 'Activo'}">
+                        <td>
+                          <div class="fw-bold" style="color: var(--antsv-dark); font-size: 1.1rem;"><i class="bi bi-cpu me-1"></i> {{ u.id_equipo }}</div>
+                          <div class="mt-1" style="font-size: 0.85rem;">
+                            <div class="mb-1"><span class="fw-bold text-uppercase" style="color: var(--antsv-dark); font-size: 0.75rem;">Marca:</span> <span class="text-muted">{{ getEquipoMarca(u.id_equipo) }}</span></div>
+                            <div><span class="fw-bold text-uppercase" style="color: var(--antsv-dark); font-size: 0.75rem;">Propietario:</span> <span class="text-muted">{{ getEquipoEmpresa(u.id_equipo) }}</span></div>
+                          </div>
+                        </td>
+                        <td>
+                          <div class="d-flex align-items-center">
+                            <i class="bi bi-geo-alt-fill text-danger me-2 fs-5"></i>
+                            <div>
+                              <div class="fw-bold">{{ u.departamento }}</div>
+                              <div class="small text-muted">{{ u.distrito }}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <div class="badge mb-1" style="background-color: transparent; border: 1px solid var(--antsv-dark); color: var(--antsv-dark);">{{ u.competencia }}</div>
+                          <div class="small">{{ u.lugar_especifico }}</div>
+                        </td>
+                        <td>
+                          <span class="badge" :class="u.estado_actual === 'Activo' ? 'bg-success' : 'bg-secondary'"><i :class="u.estado_actual === 'Activo' ? 'bi bi-check-circle' : 'bi bi-clock-history'" class="me-1"></i>{{ u.estado_actual }}</span>
+                        </td>
+                        <td class="text-center">
+                          <button class="btn btn-sm btn-outline-secondary" @click="viewUbiDetails(u)" title="Ver Detalles"><i class="bi bi-eye"></i></button>
+                        </td>
+                      </tr>
+                      <tr v-if="filteredUbicaciones.length === 0">
+                        <td colspan="5" class="text-center p-5 text-muted"><i class="bi bi-search display-6 d-block mb-3 opacity-50"></i>No se encontraron ubicaciones con los filtros actuales.</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="currentView === 'CONFIGURACION'" class="card shadow-sm border-0">
+            <div class="card-header p-0" style="background-color: var(--antsv-dark); border-radius: 10px 10px 0 0;">
+              <ul class="nav nav-tabs px-3 pt-3" style="border-bottom: none;">
+                <li class="nav-item">
+                  <a class="nav-link rounded-top" :class="{active: activeConfigTab === 'PARAMETROS', 'text-dark fw-bold': activeConfigTab === 'PARAMETROS', 'text-white': activeConfigTab !== 'PARAMETROS'}" href="#" @click.prevent="activeConfigTab = 'PARAMETROS'" style="border: none; border-bottom: 3px solid transparent;" :style="activeConfigTab === 'PARAMETROS' ? 'background-color: var(--antsv-white);' : ''">
+                    <i class="bi bi-gear-fill me-1"></i> Parámetros del Sistema
+                  </a>
+                </li>
+                <li class="nav-item" v-if="role === 'ADMIN'">
+                  <a class="nav-link rounded-top" :class="{active: activeConfigTab === 'USUARIOS', 'text-dark fw-bold': activeConfigTab === 'USUARIOS', 'text-white': activeConfigTab !== 'USUARIOS'}" href="#" @click.prevent="activeConfigTab = 'USUARIOS'" style="border: none; border-bottom: 3px solid transparent;" :style="activeConfigTab === 'USUARIOS' ? 'background-color: var(--antsv-white);' : ''">
+                    <i class="bi bi-people-fill me-1"></i> Accesos y Usuarios
+                  </a>
+                </li>
+              </ul>
+            </div>
+
+            <div class="card-body bg-light p-4">
+
+              <div v-show="activeConfigTab === 'PARAMETROS'">
+                <div class="d-flex justify-content-end mb-3">
+                  <button class="btn btn-warning btn-sm fw-bold shadow-sm" @click="toggleEditConfig" v-if="!isEditingConfig"><i class="bi bi-pencil-square me-1"></i> Habilitar Edición</button>
+                </div>
+                <div class="alert alert-warning border-warning shadow-sm mb-4" v-if="isEditingConfig">
+                  <i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i> <strong>Modo Edición Activado:</strong> Modificar estos valores alterará el funcionamiento global.
+                </div>
+
+                <div class="card border-0 shadow-sm">
+                  <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                      <thead class="table-light">
+                        <tr>
+                          <th style="width: 25%;"><i class="bi bi-key me-1"></i> Parámetro (Clave)</th>
+                          <th style="width: 45%;">Valor de Configuración</th>
+                          <th style="width: 30%;">Descripción / Efecto</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="item in (isEditingConfig ? formConfig : db.configuracion_raw)" :key="item.clave">
+                          <td class="fw-bold" style="color: var(--antsv-dark); font-family: monospace;">{{ item.clave }}</td>
+                          <td>
+                            <div v-if="!isEditingConfig">
+                              <span v-if="item.valor === 'True'" class="badge bg-success px-3 py-2"><i class="bi bi-toggle-on me-1"></i>Activado</span>
+                              <span v-else-if="item.valor === 'False'" class="badge bg-danger px-3 py-2"><i class="bi bi-toggle-off me-1"></i>Desactivado</span>
+                              <div v-else class="text-break bg-light border rounded p-2 small">{{ item.valor }}</div>
+                            </div>
+                            <div v-else>
+                              <select v-if="item.valor === 'True' || item.valor === 'False'" class="form-select shadow-sm" v-model="item.valor">
+                                <option value="True">Activado</option>
+                                <option value="False">Desactivado</option>
+                              </select>
+                              <textarea v-else class="form-control shadow-sm" v-model="item.valor" rows="2"></textarea>
+                            </div>
+                          </td>
+                          <td class="small text-muted border-start">{{ item.descripcion }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div class="d-flex justify-content-end gap-2 mt-4" v-if="isEditingConfig">
+                  <button class="btn btn-outline-secondary px-4" @click="isEditingConfig = false"><i class="bi bi-x-circle me-1"></i> Cancelar</button>
+                  <button class="btn btn-success px-4 fw-bold shadow" @click="submitConfig"><i class="bi bi-save me-1"></i> Guardar Cambios</button>
+                </div>
+              </div>
+
+              <div v-show="activeConfigTab === 'USUARIOS'">
+                <div v-if="!showUserForm">
+                  <div class="d-flex justify-content-end mb-3">
+                    <button class="btn btn-primary fw-bold shadow-sm" @click="openUserForm()"><i class="bi bi-person-plus-fill me-1"></i> Nuevo Usuario</button>
+                  </div>
+                  <div class="card border-0 shadow-sm table-responsive">
+                    <table class="table table-hover align-middle text-center mb-0">
+                      <thead class="table-light">
+                        <tr>
+                          <th>Avatar</th>
+                          <th>Correo Gmail</th>
+                          <th>Rol / Perfil</th>
+                          <th>Estado</th>
+                          <th>Último Acceso</th>
+                          <th>Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="usr in db.usuarios" :key="usr.email">
+                          <td>
+                            <img v-if="usr.avatar" :src="usr.avatar" alt="avatar" class="rounded-circle border" style="width: 40px; height: 40px; object-fit: cover;">
+                            <i v-else class="bi bi-person-circle fs-2 text-muted"></i>
+                          </td>
+                          <td class="fw-bold">{{ usr.email }}</td>
+                          <td><span class="badge border text-dark" style="background-color: var(--antsv-light);">{{ usr.rol }}</span></td>
+                          <td><span class="badge" :class="usr.estado === 'ACTIVO' ? 'bg-success' : 'bg-danger'">{{ usr.estado }}</span></td>
+                          <td class="small text-muted">{{ usr.ultimo_acceso ? new Date(usr.ultimo_acceso).toLocaleString() : 'Nunca' }}</td>
+                          <td>
+                            <button class="btn btn-sm btn-outline-primary me-1" @click="openUserForm(usr)" title="Editar Permisos"><i class="bi bi-key-fill"></i></button>
+                            <button class="btn btn-sm btn-outline-danger" @click="deleteUser(usr.email)" title="Eliminar"><i class="bi bi-trash3"></i></button>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div v-if="showUserForm" class="card shadow-sm border-0">
+                  <div class="card-header bg-white border-bottom py-3">
+                    <h5 class="mb-0 fw-bold" style="color: var(--antsv-dark);"><i class="bi bi-person-badge me-2 text-primary"></i>{{ isEditingUser ? 'Editar Permisos de: ' + formUser.email : 'Nuevo Perfil de Acceso' }}</h5>
+                  </div>
+                  <div class="card-body p-4">
+                    <div class="row g-4">
+
+                      <div class="col-md-5 border-end">
+                        <h6 class="fw-bold mb-3 text-muted"><i class="bi bi-info-circle me-1"></i> Datos Principales</h6>
+
+                        <div class="mb-3">
+                          <label class="form-label fw-bold small">Cuenta de Google (Email) <span class="text-danger">*</span></label>
+                          <input type="email" class="form-control" v-model="formUser.email" :disabled="isEditingUser" placeholder="ejemplo@antsv.gov.py">
+                        </div>
+
+                        <div class="row g-2 mb-3">
+                          <div class="col-6">
+                            <label class="form-label fw-bold small">Rol Lógico</label>
+                            <select class="form-select" v-model="formUser.rol">
+                              <option value="Admin">Administrador</option>
+                              <option value="Operador">Operador</option>
+                            </select>
+                          </div>
+                          <div class="col-6">
+                            <label class="form-label fw-bold small">Estado</label>
+                            <select class="form-select" v-model="formUser.estado">
+                              <option value="ACTIVO">Activo</option>
+                              <option value="INACTIVO">Inactivo / Bloqueado</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div class="mb-3">
+                          <label class="form-label fw-bold small">Avatar / Foto de Perfil</label>
+                          <div class="d-flex align-items-center gap-2">
+                            <img v-if="formUser.avatar" :src="formUser.avatar" class="rounded-circle border" style="width: 45px; height: 45px;">
+                            <i v-else class="bi bi-person-circle fs-1 text-muted"></i>
+                            <input type="text" class="form-control form-control-sm" v-model="formUser.avatar" placeholder="URL de la imagen...">
+                            <button class="btn btn-outline-secondary btn-sm" @click="generateAvatar" title="Generar Automático"><i class="bi bi-magic"></i></button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="col-md-7">
+                        <h6 class="fw-bold mb-3 text-muted"><i class="bi bi-shield-lock me-1"></i> Matriz de Accesos por Módulo</h6>
+                        <div class="table-responsive border rounded bg-white">
+                          <table class="table table-sm table-hover align-middle mb-0">
+                            <thead class="table-light">
+                              <tr>
+                                <th>Módulo del Sistema</th>
+                                <th class="text-center">Nivel de Acceso Otorgado</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr v-for="mod in modulosDisponibles" :key="mod">
+                                <td class="fw-bold text-muted px-3"><i class="bi bi-folder2-open me-2"></i>{{ mod }}</td>
+                                <td class="text-center p-2">
+                                  <select class="form-select form-select-sm shadow-sm border-0 bg-light" v-model="formUser.permisos[mod]" :class="{'text-success fw-bold': formUser.permisos[mod]==='Editor', 'text-primary fw-bold': formUser.permisos[mod]==='Lector', 'text-danger': formUser.permisos[mod]==='Ninguno'}">
+                                    <option value="Ninguno">❌ Sin Acceso</option>
+                                    <option value="Lector">👁️ Lector (Solo Ver)</option>
+                                    <option value="Editor">✍️ Editor (Crear/Modificar)</option>
+                                  </select>
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                        <div class="alert alert-info mt-3 small py-2"><i class="bi bi-info-circle-fill me-1"></i><strong>Nota:</strong> Los usuarios "Admin" ignoran estas restricciones y tienen control total.</div>
+                      </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
+                      <button class="btn btn-outline-secondary px-4" @click="showUserForm = false"><i class="bi bi-x-circle me-1"></i> Cancelar</button>
+                      <button class="btn btn-primary px-4 fw-bold shadow" @click="submitUser" :disabled="!isFormUserValid"><i class="bi bi-check-circle me-1"></i> Guardar Credenciales</button>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+      </div>
 
       </div>
     </div>
@@ -832,7 +843,6 @@
         const db = ref({ equipos: [], ubicaciones: [], resoluciones: [], empresas: [], usuarios: [] });
         const config = ref({});
         const currentView = ref("DASHBOARD");
-        const searchQuery = ref("");
         const isMobileMenuOpen = ref(false);
 
         // =====================================
@@ -1303,12 +1313,35 @@
         };
 
         // =====================================
+        // VERIFICADOR DE PERMISO DE ESCRITURA (NUEVO)
+        // =====================================
+        const esEditor = (modulo) => {
+          if (role.value === 'ADMIN' || role.value === 'Admin') return true;
+          
+          if (!db.value.usuarios || db.value.usuarios.length === 0) return false;
+          const user = db.value.usuarios.find(u => String(u.email).toLowerCase() === String(currentUser.value).toLowerCase());
+          if (!user) return false;
+
+          try {
+            const permisos = JSON.parse(user.permisos);
+            // Compatibilidad formato viejo
+            if (permisos.roles && Array.isArray(permisos.roles) && permisos.roles.includes('Todos')) return true;
+            
+            // Validar si tiene explícitamente el rol "Editor"
+            return permisos[modulo] === 'Editor';
+          } catch (e) {
+            return false;
+          }
+        };
+
+        // =====================================
         // OBJETO DE RETORNO FINAL
         // =====================================
         return {
-          logoANTSV, isLoading, isRefreshing, loadingMessage, role, currentUser, db, config, currentView, searchQuery, isMobileMenuOpen, navigate, searchPublic: () => {},
+          logoANTSV, isLoading, isRefreshing, loadingMessage, role, currentUser, db, config, currentView, isMobileMenuOpen, navigate,
           
           activeConfigTab, isEditingConfig, formConfig, toggleEditConfig, submitConfig,
+
           showUserForm, isEditingUser, modulosDisponibles, formUser, isFormUserValid, generateAvatar, openUserForm, submitUser, deleteUser,
           
           formRes, isFormResValid, triggerFileInput, handleFileUpload, submitResolucion, activeResTab, searchRes, filterTipoActoRes, filterEstadoRes, groupedResoluciones, filteredResoluciones, estadosResolucionList, isEditingRes, openEditRes, getDistritosPorDepto, resolucionesMadreList,
@@ -1317,7 +1350,7 @@
           
           showEquipoForm, isEditingEq, formEq, isFormEqValid, openEquipoForm, submitEquipo, deleteEquipo, getEmpresaNombre, getEquipoMarca, searchEq, filterEmpresaEq, filterEstadoEq, filteredEquipos, estadosEquipoList,
           
-          showUbiForm, formUbi, deptosList, distritosFiltrados, isFormUbiValid, openUbiForm, submitUbi, getEquipoEmpresa, getEquipoUbicacion, searchUbi, filterEmpresaUbi, filterDepartamentoUbi, filterEstadoUbi, filteredUbicaciones, viewUbiDetails, tienePermiso
+          showUbiForm, formUbi, deptosList, distritosFiltrados, isFormUbiValid, openUbiForm, submitUbi, getEquipoEmpresa, getEquipoUbicacion, searchUbi, filterEmpresaUbi, filterDepartamentoUbi, filterEstadoUbi, filteredUbicaciones, viewUbiDetails, tienePermiso, esEditor
         };
       }
     }).mount('#app');
