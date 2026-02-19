@@ -276,7 +276,7 @@
                         <th>Nro. Resolución</th>
                         <th>Equipo Afectado</th>
                         <th>Tipo de Acto</th>
-                        <th>Periodo Vigencia</th>
+                        <th>Res. Afectada</th> <th>Periodo Vigencia</th>
                         <th>Estado</th>
                         <th class="text-center">Documento</th>
                       </tr>
@@ -292,10 +292,32 @@
                           </div>
                         </td>
                         <td>
-                          <span class="badge border" :class="{'bg-primary bg-opacity-10 text-primary border-primary': res.tipo_acto === '1-Homologación', 'bg-success bg-opacity-10 text-success border-success': res.tipo_acto === '2-Renovación', 'bg-warning bg-opacity-10 text-dark border-warning': res.tipo_acto === '3-Cambio Ubicación'}">
-                            <i class="me-1" :class="{'bi-award-fill': res.tipo_acto === '1-Homologación', 'bi-arrow-repeat': res.tipo_acto === '2-Renovación', 'bi-truck': res.tipo_acto === '3-Cambio Ubicación'}"></i>{{ res.tipo_acto }}
+                          <span class="badge border" :class="{
+                            'bg-secondary bg-opacity-10 text-secondary border-secondary': res.tipo_acto === '0-Inicialización',
+                            'bg-primary bg-opacity-10 text-primary border-primary': res.tipo_acto === '1-Homologación', 
+                            'bg-success bg-opacity-10 text-success border-success': res.tipo_acto === '2-Renovación', 
+                            'bg-warning bg-opacity-10 text-dark border-warning': res.tipo_acto === '3-Cambio Ubicación'
+                          }">
+                            <i class="me-1" :class="{
+                              'bi-database-fill': res.tipo_acto === '0-Inicialización',
+                              'bi-award-fill': res.tipo_acto === '1-Homologación', 
+                              'bi-arrow-repeat': res.tipo_acto === '2-Renovación', 
+                              'bi-truck': res.tipo_acto === '3-Cambio Ubicación'
+                            }"></i>{{ res.tipo_acto }}
                           </span>
                         </td>
+                        
+                        <td>
+                          <div v-if="res.tipo_acto !== '1-Homologación' && res.afecta">
+                            <span class="badge bg-light text-dark border shadow-sm" style="font-size: 0.8rem;">
+                              <i class="bi bi-link-45deg me-1 text-warning"></i>{{ res.afecta }}
+                            </span>
+                          </div>
+                          <div v-else class="text-muted small ms-3">
+                            <i class="bi bi-dash"></i>
+                          </div>
+                        </td>
+
                         <td>
                           <div class="small">
                             <div><span class="text-muted fw-bold">Emisión:</span> {{ res.fecha_emision }}</div>
@@ -312,8 +334,9 @@
                           <span v-if="!res.url_drive" class="text-muted small ms-1"><i class="bi bi-dash"></i></span>
                         </td>
                       </tr>
+                      
                       <tr v-if="filteredResoluciones.length === 0">
-                        <td colspan="6" class="text-center p-5 text-muted"><i class="bi bi-search display-6 d-block mb-3 opacity-50"></i>No se encontraron resoluciones.</td>
+                        <td colspan="7" class="text-center p-5 text-muted"><i class="bi bi-search display-6 d-block mb-3 opacity-50"></i>No se encontraron resoluciones.</td>
                       </tr>
                     </tbody>
                   </table>
@@ -354,6 +377,10 @@
                         <span class="input-group-text bg-light">/</span>
                         <input type="number" class="form-control" v-model="formRes.anio" placeholder="2026">
                       </div>
+                      <div v-if="resolucionDuplicada" class="text-danger small mt-2 fw-bold pulse-animation">
+                        <i class="bi bi-exclamation-octagon-fill me-1"></i> 
+                        Esta resolución ya registrada anteriormente, verifica el numero y año.
+                      </div>
                     </div>
 
                     <div class="mb-4">
@@ -379,28 +406,43 @@
                         </option>
                       </select>
                     </div>
+
                   </div>
 
                   <div class="col-md-6">
+
                     <div class="mb-4">
-                      <label class="form-label fw-bold"><i class="bi bi-pc-display me-2"></i>5. Equipos Afectados</label>
-                      <div class="border rounded p-3 bg-white shadow-sm" style="max-height: 200px; overflow-y: auto;">
-                        <div class="form-check mb-2" v-for="eq in db.equipos" :key="eq.id_registro">
-                          <input class="form-check-input" type="checkbox" :value="eq.id_registro" v-model="formRes.id_equipo" :id="'chk_'+eq.id_registro">
-                          <label class="form-check-label w-100" :for="'chk_'+eq.id_registro" style="cursor: pointer;">
-                            <span class="fw-bold">{{ eq.id_registro }}</span> - {{ eq.marca }}
-                          </label>
-                        </div>
+                      <label for="pdfUploader" class="form-label fw-bold"><i class="bi bi-file-earmark-pdf me-2"></i>5. Documento Escaneado (PDF)</label>
+                      <input class="form-control shadow-sm" type="file" id="pdfUploader" accept="application/pdf" @change="handleFileUpload">
+                      
+                      <div v-if="formRes.fileName" class="text-success small mt-2 fw-bold">
+                        <i class="bi bi-check-circle-fill me-1"></i> Archivo "{{ formRes.fileName }}" listo para guardar.
                       </div>
                     </div>
 
                     <div class="mb-4">
-                      <label class="form-label fw-bold"><i class="bi bi-file-earmark-pdf me-2"></i>6. Documento Escaneado (PDF)</label>
-                      <div class="drag-drop-zone shadow-sm" @click="triggerFileInput">
-                        <div v-if="!formRes.fileName"><i class="bi bi-cloud-arrow-up display-6"></i><p class="mt-2 mb-0">Seleccionar PDF</p></div>
-                        <div v-else class="text-success"><i class="bi bi-check-circle-fill display-6"></i><p class="mt-2 mb-0 fw-bold">{{ formRes.fileName }}</p></div>
+                      <label class="form-label fw-bold"><i class="bi bi-pc-display me-2"></i>6. Equipos Afectados</label>
+                      <div class="border rounded p-3 bg-white shadow-sm" style="max-height: 260px; overflow-y: auto;">
+                        
+                        <div class="form-check mb-3 pb-2 border-bottom" v-for="eq in db.equipos" :key="eq.id_registro">
+                          <input class="form-check-input mt-2" type="checkbox" :value="eq.id_registro" v-model="formRes.id_equipo" :id="'chk_'+eq.id_registro">
+                          
+                          <label class="form-check-label w-100 ms-1" :for="'chk_'+eq.id_registro" style="cursor: pointer; line-height: 1.3;">
+                            <div class="fw-bold" style="color: var(--antsv-dark); font-size: 1.05rem;">
+                              
+                              {{ eq.id_registro }} <span class="text-muted fw-normal fs-6">- {{ eq.marca }}</span>
+
+                              <div class="text-muted mt-1" style="font-size: 0.8rem;">
+                                <span class="fw-bold">Psic:</span> {{ eq.serial_psicometrico || eq['serial_psicométrico'] || 'N/A' }}
+                                <span class="fw-bold">Sens:</span> {{ eq.serial_sensometrico || eq['serial_sensométrico'] || 'N/A' }}
+                              </div>
+                            </div>
+                            
+                            
+                          </label>
+                        </div>
+
                       </div>
-                      <input type="file" id="pdfUploader" accept="application/pdf" style="display: none;" @change="handleFileUpload">
                     </div>
                   </div>
 
@@ -477,44 +519,73 @@
                 <div class="card-header bg-dark text-white py-3"><h5 class="mb-0 fw-bold"><i :class="isEditingEq ? 'bi bi-pencil-square' : 'bi bi-plus-circle'" class="me-2"></i>{{ isEditingEq ? 'Editar Equipo: ' + formEq.id_registro : 'Registrar Nuevo Equipo' }}</h5></div>
                 <div class="card-body p-4">
                   <form @submit.prevent="submitEquipo">
-                    <div class="row g-4">
-                      <div class="col-md-6">
-                        <h6 class="fw-bold text-muted mb-3 pb-2 border-bottom"><i class="bi bi-card-heading me-1"></i> Identificación y Propiedad</h6>
-                        <div class="mb-3" v-if="isEditingEq"><label class="form-label fw-bold"><i class="bi bi-upc-scan me-1 text-primary"></i>ID Registro</label><input type="text" class="form-control form-control-lg fw-bold text-uppercase font-monospace bg-light" v-model="formEq.id_registro" disabled></div>
-                        <div class="alert alert-info py-2" v-else><i class="bi bi-info-circle-fill me-2"></i>El ID de Registro se generará automáticamente al guardar.</div>
-                        <div class="mb-3">
-                          <label class="form-label fw-bold"><i class="bi bi-building me-1 text-primary"></i>Empresa Propietaria <span class="text-danger">*</span></label>
-                          <select class="form-select form-select-lg" v-model="formEq.id_empresa">
-                            <option value="" disabled>Seleccione una Empresa...</option>
-                            <option v-for="emp in db.empresas" :key="emp.id_empresa" :value="emp.id_empresa">{{ emp.razon_social }}</option>
-                          </select>
+                    
+                    <div class="row g-4 align-items-stretch">
+                      
+                        <div class="col-md-6 d-flex flex-column">
+                          <div class="p-3 border rounded shadow-sm bg-white h-100 d-flex flex-column">
+                            <h6 class="fw-bold text-muted mb-3 pb-2 border-bottom"><i class="bi bi-card-heading me-1"></i> Identificación y Propiedad</h6>
+                            
+                            <div class="mb-3" v-if="isEditingEq">
+                              <label class="form-label fw-bold"><i class="bi bi-upc-scan me-1 text-primary"></i>ID Registro</label>
+                              <input type="text" class="form-control form-control-lg fw-bold text-uppercase font-monospace bg-light" v-model="formEq.id_registro" disabled>
+                            </div>
+                            
+                            <div class="alert alert-info py-2 mb-3" v-else>
+                              <i class="bi bi-info-circle-fill me-2"></i>El ID de Registro se generará automáticamente al guardar.
+                            </div>
+                            
+                            <div class="mb-3 mt-auto"> <label class="form-label fw-bold"><i class="bi bi-building me-1 text-primary"></i>Empresa Propietaria <span class="text-danger">*</span></label>
+                              <select class="form-select form-select-lg shadow-sm" v-model="formEq.id_empresa">
+                                <option value="" disabled>Seleccione una Empresa...</option>
+                                <option v-for="emp in db.empresas" :key="emp.id_empresa" :value="emp.id_empresa">{{ emp.razon_social }}</option>
+                              </select>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                      <div class="col-md-6">
-                        <h6 class="fw-bold text-muted mb-3 pb-2 border-bottom"><i class="bi bi-tools me-1"></i> Detalles Técnicos y Estado</h6>
-                        <div class="mb-3"><label class="form-label fw-bold"><i class="bi bi-tag me-1 text-primary"></i>Marca del Equipo <span class="text-danger">*</span></label><input type="text" class="form-control" v-model="formEq.marca" placeholder="Ej: Norklan, Smartest..."></div>
-                        <div class="row g-2 mb-3">
-                          <div class="col-6"><label class="form-label fw-bold small"><i class="bi bi-barcode me-1"></i>S. Psicométrico <span class="text-danger">*</span></label><input type="text" class="form-control form-control-sm" v-model="formEq.serial_psicometrico" placeholder="Ej: PYV..."></div>
-                          <div class="col-6"><label class="form-label fw-bold small"><i class="bi bi-barcode me-1"></i>S. Sensométrico <span class="text-danger">*</span></label><input type="text" class="form-control form-control-sm" v-model="formEq.serial_sensometrico" placeholder="Ej: PYG..."></div>
+
+                        <div class="col-md-6 d-flex flex-column">
+                          <div class="p-3 border rounded shadow-sm bg-white h-100 d-flex flex-column">
+                            <h6 class="fw-bold text-muted mb-3 pb-2 border-bottom"><i class="bi bi-tools me-1"></i> Detalles Técnicos y Estado</h6>
+                            
+                            <div class="mb-3">
+                              <label class="form-label fw-bold"><i class="bi bi-tag me-1 text-primary"></i>Marca del Equipo <span class="text-danger">*</span></label>
+                              <input type="text" class="form-control shadow-sm" v-model="formEq.marca" placeholder="Ej: Norklan, Smartest...">
+                            </div>
+                            
+                            <div class="row g-2 mb-3">
+                              <div class="col-6">
+                                <label class="form-label fw-bold small"><i class="bi bi-barcode me-1"></i>S. Psicométrico <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control form-control-sm shadow-sm" v-model="formEq.serial_psicometrico" placeholder="Ej: PYV...">
+                              </div>
+                              <div class="col-6">
+                                <label class="form-label fw-bold small"><i class="bi bi-barcode me-1"></i>S. Sensométrico <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control form-control-sm shadow-sm" v-model="formEq.serial_sensometrico" placeholder="Ej: PYG...">
+                              </div>
+                            </div>
+                            
+                            <div class="mb-2 mt-auto"> <label class="form-label fw-bold d-flex justify-content-between align-items-center">
+                                <span><i class="bi bi-stoplights me-1 text-primary"></i>Estado</span>
+                                <span v-if="formEq.estado_homologacion" class="badge rounded-pill" :class="{'bg-success': formEq.estado_homologacion === 'Homologado', 'bg-danger': formEq.estado_homologacion === 'No Homologado'}">{{ formEq.estado_homologacion }}</span>
+                                <span v-else class="badge rounded-pill bg-secondary"><i class="bi bi-hourglass-split me-1"></i>Sin Homologar</span>
+                              </label>
+                              <select class="form-select bg-light border-0 shadow-sm" v-model="formEq.estado_homologacion" disabled>
+                                <option value="">En Blanco / Pendiente</option>
+                                <option v-for="est in estadosEquipoList" :key="est.id_catalogo" :value="est.valor">{{ est.valor }}</option>
+                              </select>
+                              <div class="form-text small text-muted"><i class="bi bi-shield-lock me-1"></i>Este estado se automatiza al subir una Resolución.</div>
+                            </div>
+                          </div>
                         </div>
-                        <div class="mb-3">
-                          <label class="form-label fw-bold d-flex justify-content-between align-items-center">
-                            <span><i class="bi bi-stoplights me-1 text-primary"></i>Estado</span>
-                            <span v-if="formEq.estado_homologacion" class="badge rounded-pill" :class="{'bg-success': formEq.estado_homologacion === 'Homologado', 'bg-danger': formEq.estado_homologacion === 'No Homologado'}">{{ formEq.estado_homologacion }}</span>
-                            <span v-else class="badge rounded-pill bg-secondary"><i class="bi bi-hourglass-split me-1"></i>Sin Homologar</span>
-                          </label>
-                          <select class="form-select bg-light" v-model="formEq.estado_homologacion" disabled>
-                            <option value="">En Blanco / Pendiente</option>
-                            <option v-for="est in estadosEquipoList" :key="est.id_catalogo" :value="est.valor">{{ est.valor }}</option>
-                          </select>
-                          <div class="form-text small text-muted"><i class="bi bi-shield-lock me-1"></i>Este estado se automatiza al subir una Resolución.</div>
+
+                        <div class="col-12">
+                          <div class="p-3 border rounded shadow-sm bg-white">
+                            <label class="form-label fw-bold"><i class="bi bi-chat-left-text me-1 text-primary"></i>Observaciones / Notas Adicionales</label>
+                            <textarea class="form-control shadow-sm" v-model="formEq.descripcion" rows="3" placeholder="Ingrese cualquier nota relevante sobre el equipo, su estado o historial..."></textarea>
+                          </div>
                         </div>
-                      </div>
-                      <div class="col-12">
-                        <label class="form-label fw-bold"><i class="bi bi-chat-left-text me-1 text-primary"></i>Observaciones / Notas Adicionales</label>
-                        <textarea class="form-control" v-model="formEq.descripcion" rows="3" placeholder="Ingrese cualquier nota relevante sobre el equipo, su estado o historial..."></textarea>
-                      </div>
                     </div>
+
                     <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
                       <button type="button" class="btn btn-outline-secondary px-4" @click="showEquipoForm = false"><i class="bi bi-x-lg me-2"></i>Cancelar</button>
                       <button type="submit" class="btn btn-success px-4 fw-bold" :disabled="!isFormEqValid"><i class="bi bi-check-lg me-2"></i>{{ isEditingEq ? 'Actualizar Equipo' : 'Guardar Nuevo Equipo' }}</button>
@@ -557,6 +628,9 @@
                         </td>
                         
                         <td class="text-center" v-if="esEditor('Equipos')">
+                          <button class="btn btn-sm btn-outline-dark me-1" @click="mostrarQR(eq)" title="Generar Sticker QR">
+                            <i class="bi bi-qr-code"></i>
+                          </button>
                           <button class="btn btn-sm btn-outline-primary me-1" @click="openEquipoForm(eq)" title="Editar"><i class="bi bi-pencil-square"></i></button>
                           <button class="btn btn-sm btn-outline-danger" @click="deleteEquipo(eq.id_registro)" title="Eliminar"><i class="bi bi-trash3"></i></button>
                         </td>
@@ -1096,6 +1170,16 @@
         ubicaciones_equipos: {} 
       });
 
+      // Detecta si la resolución ya existe en la base de datos
+      const resolucionDuplicada = computed(() => {
+        if (!db.value.resoluciones || !formRes.value.numero || !formRes.value.anio) return false;
+        const idActual = resolucionFormateada.value.trim().toUpperCase();
+        if (isEditingRes.value && idActual === formRes.value.id_original.trim().toUpperCase()) {
+          return false;
+        }
+        return db.value.resoluciones.some(r => String(r.id_resolucion).trim().toUpperCase() === idActual);
+      });
+
       watch(() => formRes.value.id_equipo, (newEquipos) => {
         newEquipos.forEach(eqId => {
           // Si el equipo seleccionado no tiene aún su objeto de ubicación, lo creamos
@@ -1188,29 +1272,38 @@
         }).then((result) => {
           if (result.isConfirmed) {
             isLoading.value = true; loadingMessage.value = isEditingRes.value ? "Actualizando datos..." : "Registrando trámite y controlando tiempos...";
+            
+            // --- AQUÍ ESTÁ LA CORRECCIÓN: Agregamos las dos fechas al payload ---
             const payloadData = {
-              id_original: formRes.value.id_original, id_nuevo: resolucionFormateada.value, id_resolucion: resolucionFormateada.value,
-              id_equipo: formRes.value.id_equipo, tipo_acto: formRes.value.tipo_acto, afecta: formRes.value.afecta,
+              id_original: formRes.value.id_original, 
+              id_nuevo: resolucionFormateada.value, 
+              id_resolucion: resolucionFormateada.value,
+              id_equipo: formRes.value.id_equipo, 
+              tipo_acto: formRes.value.tipo_acto, 
+              afecta: formRes.value.afecta,
+              fecha_emision: formRes.value.fecha_emision, // <--- FALTABA ESTO
+              vencimiento: formRes.value.vencimiento,     // <--- FALTABA ESTO
               ubicaciones_equipos: formRes.value.incluir_ubicaciones ? formRes.value.ubicaciones_equipos : null 
             };
+            
             if (isEditingRes.value) {
               google.script.run
                 .withSuccessHandler(() => {
                   isLoading.value = false; Swal.fire('Éxito', 'Resolución actualizada.', 'success');
-                  formRes.value = { id_original: "", numero: "", anio: new Date().getFullYear(), id_equipo: [], tipo_acto: "1-Homologación", afecta: "", fileBase64: null, fileName: "", mimeType: "", incluir_ubicaciones: false, ubicaciones_equipos: {} };
+                  formRes.value = { id_original: "", numero: "", anio: new Date().getFullYear(), fecha_emision: "", vencimiento: "", id_equipo: [], tipo_acto: "1-Homologación", afecta: "", fileBase64: null, fileName: "", mimeType: "", incluir_ubicaciones: false, ubicaciones_equipos: {} };
                   isEditingRes.value = false; activeResTab.value = "LISTADO"; refreshDataSilent(); 
                 }).withFailureHandler(err => { isLoading.value = false; Swal.fire('Error', err.message, 'error'); })
                 .updateResolucionTransaction(payloadData);
             } else {
               const payloadFile = { 
                 base64: formRes.value.fileBase64, 
-                nombre: resolucionFormateada.value + ".pdf", // Resultado: ANTSV N° 670_2023.pdf
+                nombre: resolucionFormateada.value + ".pdf", 
                 mimeType: formRes.value.mimeType 
               };
               google.script.run
                 .withSuccessHandler(() => {
-                  isLoading.value = false; Swal.fire('Éxito', 'Trámite legal registrado y equipos actualizados.', 'success');
-                  formRes.value = { id_original: "", numero: "", anio: new Date().getFullYear(), id_equipo: [], tipo_acto: "1-Homologación", afecta: "", fileBase64: null, fileName: "", mimeType: "", incluir_ubicaciones: false, ubicaciones_equipos: {} };
+                  isLoading.value = false; Swal.fire('Éxito', 'Trámite legal registrado.', 'success');
+                  formRes.value = { id_original: "", numero: "", anio: new Date().getFullYear(), fecha_emision: "", vencimiento: "", id_equipo: [], tipo_acto: "1-Homologación", afecta: "", fileBase64: null, fileName: "", mimeType: "", incluir_ubicaciones: false, ubicaciones_equipos: {} };
                   activeResTab.value = "LISTADO"; refreshDataSilent(); 
                 }).withFailureHandler(err => { isLoading.value = false; Swal.fire('Error', err.message, 'error'); })
                 .processResolutionUpload(payloadFile, payloadData);
@@ -1306,7 +1399,7 @@
         const submitEquipo = () => {
           isLoading.value = true; loadingMessage.value = "Guardando Equipo...";
           google.script.run
-            .withSuccessHandler(() => { Swal.fire('Éxito', 'Equipo registrado.', 'success'); showEquipoForm.value = false; refreshDataSilent(); })
+            .withSuccessHandler(() => { isLoading.value = false;Swal.fire('Éxito', 'Equipo registrado.', 'success'); showEquipoForm.value = false; refreshDataSilent(); })
             .withFailureHandler(err => { isLoading.value = false; Swal.fire('Error', err.message, 'error'); })
             .saveEquipoTransaction(formEq.value);
         };
@@ -1323,6 +1416,7 @@
           });
         };
 
+        
         const searchEq = ref(""); const filterEmpresaEq = ref(""); const filterEstadoEq = ref("");
         const estadosEquipoList = computed(() => db.value.catalogos ? db.value.catalogos.filter(c => c.categoria === 'ESTADO_EQUIPO') : []);
 
@@ -1336,6 +1430,78 @@
           }
           return result;
         });
+
+        // ================= GESTOR DE STICKERS QR =================
+        const mostrarQR = (eq) => {
+          const nombreEmpresa = getEmpresaNombre(eq.id_empresa);
+          
+          // 1. Preparamos el texto de forma segura (con saltos de línea reales)
+          const lineasTexto = [
+            "RNME - ANTSV",
+            "ID: " + eq.id_registro,
+            "Marca: " + eq.marca,
+            "Propietario: " + nombreEmpresa,
+            "Psic: " + (eq.serial_psicometrico || eq['serial_psicométrico'] || "N/A"),
+            "Sens: " + (eq.serial_sensometrico || eq['serial_sensométrico'] || "N/A")
+          ];
+          
+          // encodeURIComponent convierte los saltos de línea y espacios en formato seguro para URLs
+          const textoQR = encodeURIComponent(lineasTexto.join('\n'));
+                          
+          // 2. Construimos la URL de QuickChart
+          const urlQR = "https://quickchart.io/qr?text=" + textoQR + "&ecLevel=H&margin=1&size=200";
+
+          // 3. Mostramos el Modal con SweetAlert2
+          Swal.fire({
+            title: "Sticker QR - " + eq.id_registro,
+            html: 
+              '<div class="text-center mt-2">' +
+                '<div class="p-3 border rounded d-inline-block bg-white shadow-sm mb-3">' +
+                  '<img src="' + urlQR + '" alt="QR Code" style="width: 200px; height: 200px;">' +
+                '</div>' +
+                '<p class="text-muted small">Al escanear este código se mostrarán los datos técnicos y de propiedad del equipo físico.</p>' +
+              '</div>',
+            showCancelButton: true,
+            confirmButtonText: '<i class="bi bi-printer-fill me-1"></i> Imprimir Sticker',
+            cancelButtonText: "Cerrar",
+            confirmButtonColor: "#243F5C"
+          }).then((result) => {
+            if (result.isConfirmed) {
+              imprimirStickerQR(urlQR, eq.id_registro, eq.marca, nombreEmpresa);
+            }
+          });
+        };
+
+        const imprimirStickerQR = (qrUrl, idEq, marca, empresa) => {
+          // Crea una ventana emergente temporal para mandar a imprimir
+          const printWindow = window.open('', '_blank', 'width=400,height=400');
+          
+          const htmlContent = 
+            '<html>' +
+              '<head>' +
+                '<title>Imprimir QR - ' + idEq + '</title>' +
+                '<style>' +
+                  'body { font-family: sans-serif; text-align: center; margin: 0; padding: 10px; }' +
+                  '.sticker { border: 1px solid #000; padding: 10px; width: 220px; margin: 0 auto; border-radius: 8px; }' +
+                  'img { width: 180px; height: 180px; }' +
+                  '.id-text { font-size: 18px; font-weight: bold; margin: 5px 0; }' +
+                  '.sub-text { font-size: 10px; margin: 2px 0; color: #333; }' +
+                  '@media print { body { padding: 0; } .sticker { border: none; } }' +
+                '</style>' +
+              '</head>' +
+              '<body>' +
+                '<div class="sticker">' +
+                  '<div class="id-text">RNME: ' + idEq + '</div>' +
+                  '<img src="' + qrUrl + '" onload="window.print();window.close()" />' +
+                  '<div class="sub-text">' + marca + '</div>' +
+                  '<div class="sub-text">' + empresa.substring(0, 30) + '</div>' +
+                '</div>' +
+              '</body>' +
+            '</html>';
+            
+          printWindow.document.write(htmlContent);
+          printWindow.document.close();
+        };
 
         // =====================================
         // MÓDULO UBICACIONES
@@ -1513,7 +1679,7 @@
           
           formRes, isFormResValid, triggerFileInput, handleFileUpload, submitResolucion, activeResTab, searchRes, filterTipoActoRes, filterEstadoRes, groupedResoluciones, filteredResoluciones, estadosResolucionList, isEditingRes, openEditRes, getDistritosPorDepto, resolucionesMadreList,
           
-          showEmpresaForm, isEditingEmp, formEmp, isFormEmpValid, openEmpresaForm, submitEmpresa, deleteEmpresa,
+          showEmpresaForm, isEditingEmp, formEmp, isFormEmpValid, openEmpresaForm, submitEmpresa, deleteEmpresa, mostrarQR,
           
           showEquipoForm, isEditingEq, formEq, isFormEqValid, openEquipoForm, submitEquipo, deleteEquipo, getEmpresaNombre, getEquipoMarca, searchEq, filterEmpresaEq, filterEstadoEq, filteredEquipos, estadosEquipoList,
           

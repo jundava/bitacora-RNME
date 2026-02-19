@@ -169,59 +169,83 @@ function requerirEditor(modulo) {
 // ================= GESTOR DE RESOLUCIONES =================
 function processResolutionUpload(fileData, formData) {
   return runWithRetry(() => {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheetRes = ss.getSheetByName("APP_RESOLUCIONES");
+    const resData = sheetRes.getDataRange().getValues();
+
+    // 1. COMPROBACIÓN INICIAL DE DUPLICADOS (Antes de Drive)
+    const nuevoIdRes = String(formData.id_resolucion).trim().toUpperCase();
+    
+    // Recorremos la columna 0 (id_resolucion) de la hoja APP_RESOLUCIONES
+    for (let i = 1; i < resData.length; i++) {
+      if (String(resData[i][0]).trim().toUpperCase() === nuevoIdRes) {
+        throw new Error("La resolución " + formData.id_resolucion + " ya se encuentra registrada en el sistema.");
+      }
+    }
+
+    // 2. CONFIGURACIÓN Y SUBIDA A DRIVE
+    // Solo llegamos aquí si el ID no es duplicado
     const config = getTableData("APP_CONFIGURACION");
     const ubiConfig = config.find(c => c.clave === "UBI_RESOLUCIONES");
     if (!ubiConfig || !ubiConfig.valor) throw new Error("Carpeta UBI_RESOLUCIONES no configurada.");
 
     const folderId = (ubiConfig.valor.match(/folders\/([a-zA-Z0-9_-]+)/) || [])[1];
-    const driveFile = DriveApp.getFolderById(folderId).createFile(Utilities.newBlob(Utilities.base64Decode(fileData.base64), fileData.mimeType, fileData.nombre));
+    const driveFile = DriveApp.getFolderById(folderId).createFile(
+      Utilities.newBlob(Utilities.base64Decode(fileData.base64), fileData.mimeType, fileData.nombre)
+    );
     const fileUrl = driveFile.getUrl();
 
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheetRes = ss.getSheetByName("APP_RESOLUCIONES");
     const sheetEq = ss.getSheetByName("APP_EQUIPOS");
-    
     const eqData = sheetEq.getDataRange().getValues();
-    const resData = sheetRes.getDataRange().getValues();
 
+    // 3. LÓGICA DE FECHAS
     const fEmiStr = formData.fecha_emision;
-    const fVenStr = formData.vencimiento;    
+    let fVenStr = formData.vencimiento;    
 
-    // LÓGICA DE VENCIMIENTOS
     if (formData.tipo_acto === "3-Cambio Ubicación") {
-      // Hereda vencimiento de la resolución afectada
+      // Si es un traslado, heredamos vencimiento de la resolución madre
       const resMadre = resData.find(r => r[0] === formData.afecta);
       if (!resMadre) throw new Error("No se encontró la Resolución Anterior para heredar el vencimiento.");
       fVenStr = new Date(resMadre[4]).toISOString().split('T')[0];
-    } else {
-      // Actos 1 y 2: Un año exacto desde la firma (hoy)
-      const dVen = new Date();
-      dVen.setFullYear(dVen.getFullYear() + 1);
-      fVenStr = dVen.toISOString().split('T')[0];
-    }
+    } 
     
     const equiposAfectados = Array.isArray(formData.id_equipo) ? formData.id_equipo : [formData.id_equipo];
-    const afectaId = formData.afecta || ""; // Resolución anterior
+    const afectaId = formData.afecta || ""; 
     
+    // 4. INSERCIÓN EN APP_RESOLUCIONES Y ACTUALIZACIÓN DE EQUIPOS
     equiposAfectados.forEach(eqId => {
-      // Inserción incluyendo el campo 'afecta' (índice 2)
       sheetRes.appendRow([formData.id_resolucion, formData.tipo_acto, afectaId, fEmiStr, fVenStr, "Vigente", fileUrl, "", eqId]);
       
-      // Si es Homologación o Renovación, sostenemos el estado a Homologado
+      // Si es Homologación o Renovación, ponemos el equipo como Homologado
       if(formData.tipo_acto !== "3-Cambio Ubicación") {
-        for (let i = 1; i < eqData.length; i++) if (String(eqData[i][0]).trim() === eqId) { sheetEq.getRange(i + 1, 7).setValue("Homologado"); break; }
+        for (let i = 1; i < eqData.length; i++) {
+          if (String(eqData[i][0]).trim() === eqId) { 
+            sheetEq.getRange(i + 1, 7).setValue("Homologado"); 
+            break; 
+          }
+        }
       }
     });
 
-    // LÓGICA DE UBICACIONES UNIVERSAL (Ahora aplica si el usuario llena las ubicaciones, sin importar el tipo de acto)
+    // 5. LÓGICA DE UBICACIONES UNIVERSAL
     if (formData.ubicaciones_equipos && Object.keys(formData.ubicaciones_equipos).length > 0) {
       const sheetUbi = ss.getSheetByName("APP_UBICACIONES");
       const ubiData = sheetUbi.getDataRange().getValues();
       equiposAfectados.forEach(eqId => {
         const p = formData.ubicaciones_equipos[eqId];
         if(p && p.departamento && p.distrito && p.lugar_especifico) {
-            for (let i = 1; i < ubiData.length; i++) if (ubiData[i][1] === eqId && ubiData[i][6] === "Activo") sheetUbi.getRange(i + 1, 7).setValue("Histórico");
-            sheetUbi.appendRow(["UBI-" + Utilities.getUuid().substring(0,8).toUpperCase(), eqId, p.departamento, p.distrito, p.competencia || "Distrital", p.lugar_especifico, "Activo"]);
+            // Ponemos en histórico la ubicación activa anterior
+            for (let i = 1; i < ubiData.length; i++) {
+              if (ubiData[i][1] === eqId && ubiData[i][6] === "Activo") {
+                sheetUbi.getRange(i + 1, 7).setValue("Histórico");
+              }
+            }
+            // Insertamos la nueva ubicación
+            sheetUbi.appendRow([
+              "UBI-" + Utilities.getUuid().substring(0,8).toUpperCase(), 
+              eqId, p.departamento, p.distrito, p.competencia || "Distrital", 
+              p.lugar_especifico, "Activo"
+            ]);
         }
       });
     }
@@ -249,8 +273,11 @@ function updateResolucionTransaction(payload) {
     for (let i = rowsToDelete.length - 1; i >= 0; i--) sheetRes.deleteRow(rowsToDelete[i]);
 
     const equipos = Array.isArray(payload.id_equipo) ? payload.id_equipo : [payload.id_equipo];
-    const fEmiStr = originalRes.fEmi instanceof Date ? originalRes.fEmi.toISOString().split('T')[0] : originalRes.fEmi;
-    const fVenStr = originalRes.fVen instanceof Date ? originalRes.fVen.toISOString().split('T')[0] : originalRes.fVen;
+    
+    // CORRECCIÓN AQUÍ: Tomamos las fechas del payload (si las editaron), sino, usamos las originales.
+    const fEmiStr = payload.fecha_emision || (originalRes.fEmi instanceof Date ? originalRes.fEmi.toISOString().split('T')[0] : originalRes.fEmi);
+    const fVenStr = payload.vencimiento || (originalRes.fVen instanceof Date ? originalRes.fVen.toISOString().split('T')[0] : originalRes.fVen);
+    
     const afectaId = payload.afecta || "";
     
     equipos.forEach(eqId => sheetRes.appendRow([payload.id_nuevo, payload.tipo_acto, afectaId, fEmiStr, fVenStr, originalRes.st, originalRes.url, "", eqId]));
