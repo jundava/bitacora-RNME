@@ -12,6 +12,13 @@
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.3/dist/sweetalert2.all.min.js"></script>
 
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.3/dist/sweetalert2.all.min.js"></script>
+  
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+
   <style>
     :root {
       --antsv-dark: #243F5C;
@@ -159,6 +166,122 @@
               <p class="text-muted">Si busca consultar la validez de un equipo, por favor diríjase al Verificador Público.</p>
             </div>
           </div>
+
+          <div v-if="currentView === 'DASHBOARD'">
+            
+            <div class="d-flex justify-content-between align-items-center mb-4">
+              <h4 class="fw-bold" style="color: var(--antsv-dark);"><i class="bi bi-speedometer2 me-2"></i>Panel de Control General</h4>
+              <span class="text-muted small"><i class="bi bi-clock-history me-1"></i>Actualizado en tiempo real</span>
+            </div>
+
+            <div class="row g-3 mb-4">
+              <div class="col-md-3">
+                <div class="card shadow-sm border-0 h-100" style="border-left: 5px solid var(--antsv-green) !important;">
+                  <div class="card-body">
+                    <h6 class="text-muted text-uppercase small fw-bold mb-2">Equipos Homologados</h6>
+                    <h2 class="fw-bold mb-0 text-dark">{{ kpiEquipos.porcentaje }}%</h2>
+                    <div class="small mt-1 text-success fw-bold"><i class="bi bi-check-circle-fill me-1"></i>{{ kpiEquipos.homologados }} de {{ kpiEquipos.total }} Operativos</div>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="col-md-3">
+                <div class="card shadow-sm border-0 h-100" style="border-left: 5px solid #dc3545 !important;">
+                  <div class="card-body">
+                    <h6 class="text-muted text-uppercase small fw-bold mb-2">Resoluciones en Riesgo</h6>
+                    <h2 class="fw-bold mb-0 text-danger">{{ kpiRiesgo.length }}</h2>
+                    <div class="small mt-1 text-muted"><i class="bi bi-exclamation-triangle-fill text-danger me-1"></i>Vencen en &lt; 30 días</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-md-3">
+                <div class="card shadow-sm border-0 h-100" 
+                     style="border-left: 5px solid #0d6efd !important; cursor: pointer; transition: transform 0.2s;" 
+                     @click="mostrarCoberturaNacional" 
+                     onmouseover="this.style.transform='translateY(-5px)'" 
+                     onmouseout="this.style.transform='none'">
+                  <div class="card-body">
+                    <h6 class="text-muted text-uppercase small fw-bold mb-2">Cobertura Nacional</h6>
+                    <h2 class="fw-bold mb-0 text-primary">{{ kpiUbicaciones }}</h2>
+                    <div class="small mt-1 text-primary fw-bold" style="font-size: 0.8rem;">
+                      <i class="bi bi-bar-chart-fill me-1"></i>Ver mapa de distribución <i class="bi bi-arrow-right-short"></i>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-md-3">
+                <div class="card shadow-sm border-0 h-100" style="border-left: 5px solid #6c757d !important;">
+                  <div class="card-body">
+                    <h6 class="text-muted text-uppercase small fw-bold mb-2">Red de Empresas</h6>
+                    <h2 class="fw-bold mb-0 text-secondary">{{ kpiEmpresas }}</h2>
+                    <div class="small mt-1 text-muted"><i class="bi bi-buildings-fill text-secondary me-1"></i>Entidades registradas</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="row g-4 mb-4 align-items-stretch">
+              <div class="col-md-4 d-flex flex-column">
+                <div class="card shadow-sm border-0 h-100 flex-grow-1 p-3">
+                  <h6 class="fw-bold text-muted mb-3 text-center">Estado Legal del Parque Físico</h6>
+                  <div style="position: relative; height: 250px; width: 100%;">
+                    <canvas id="estadoChart"></canvas>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-8 d-flex flex-column">
+                <div class="card shadow-sm border-0 h-100 flex-grow-1 p-3">
+                  <h6 class="fw-bold text-muted mb-3">Distribución por Departamentos (Top 15)</h6>
+                  <div style="position: relative; height: 250px; width: 100%;">
+                    <canvas id="deptoChart"></canvas>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card shadow-sm border-0">
+              <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold text-danger"><i class="bi bi-alarm-fill me-2"></i>Atención Inmediata: Próximos Vencimientos</h6>
+              </div>
+              <div class="card-body p-0">
+                <div class="table-responsive">
+                  <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                      <tr>
+                        <th class="ps-4">Resolución</th>
+                        <th>Equipo Afectado</th>
+                        <th>Propietario</th>
+                        <th>Fecha de Caducidad</th>
+                        <th>Tiempo Restante</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="res in kpiRiesgo.slice(0, 5)" :key="res.id_resolucion">
+                        <td class="ps-4 fw-bold text-dark">{{ res.id_resolucion }}</td>
+                        <td><span class="badge bg-dark">{{ res.id_equipo_vinculado }}</span></td>
+                        <td class="small">{{ getEmpresaNombre(getEquipoInfoDash(res.id_equipo_vinculado).id_empresa) }}</td>
+                        <td class="text-danger fw-bold">{{ res.vencimiento }}</td>
+                        <td>
+                          <span class="badge bg-warning text-dark border border-warning shadow-sm">
+                            <i class="bi bi-hourglass-split me-1"></i> {{ calcularDiasRestantes(res.vencimiento) }} días
+                          </span>
+                        </td>
+                      </tr>
+                      <tr v-if="kpiRiesgo.length === 0">
+                        <td colspan="5" class="text-center py-4 text-success fw-bold">
+                          <i class="bi bi-shield-check fs-4 d-block mb-2"></i> ¡Excelente! No hay resoluciones a punto de vencer.
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
 
           <div v-if="currentView === 'EMPRESAS'" class="card shadow-sm border-0">
             <div class="card-header d-flex justify-content-between align-items-center p-3">
@@ -1668,6 +1791,224 @@
         };
 
         // =====================================
+        // MÓDULO DASHBOARD (KPIs y Gráficos)
+        // =====================================
+
+        // Variables globales para destruir gráficos viejos al recargar
+        let chartEstado = null;
+        let chartDepto = null;
+
+        // KPI 1: Equipos Homologados
+        const kpiEquipos = computed(() => {
+          if (!db.value.equipos) return { homologados: 0, total: 0, porcentaje: 0 };
+          const total = db.value.equipos.length;
+          const homologados = db.value.equipos.filter(e => e.estado_homologacion === 'Homologado').length;
+          const porcentaje = total === 0 ? 0 : Math.round((homologados / total) * 100);
+          return { homologados, total, porcentaje };
+        });
+
+        // KPI 2: Resoluciones en Riesgo (< 30 días)
+        const kpiRiesgo = computed(() => {
+          if (!db.value.resoluciones) return [];
+          const hoy = new Date();
+          hoy.setHours(0,0,0,0);
+          const limite = new Date();
+          limite.setDate(hoy.getDate() + 30);
+
+          return db.value.resoluciones.filter(r => {
+            if (r.estado !== 'Vigente') return false;
+            const fVen = new Date(r.vencimiento);
+            return fVen > hoy && fVen <= limite;
+          }).sort((a, b) => new Date(a.vencimiento) - new Date(b.vencimiento));
+        });
+
+        // KPI 3 y 4: Cobertura y Empresas
+        const kpiUbicaciones = computed(() => db.value.ubicaciones ? db.value.ubicaciones.filter(u => u.estado_actual === 'Activo').length : 0);
+        const kpiEmpresas = computed(() => db.value.empresas ? db.value.empresas.length : 0);
+
+        // =====================================
+        // DETALLE MODAL: MAPA DE PARAGUAY (Híbrido y Exacto)
+        // =====================================
+        const mostrarCoberturaNacional = () => {
+          if (!db.value.ubicaciones) return;
+
+          // 1. ESCÁNER AGRESIVO: Detecta cualquier variación de texto y devuelve el ISO estricto
+          const getIsoPY = (str) => {
+            if(!str) return 'OTROS';
+            let s = str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            
+            if(s.includes('asu') || s.includes('capital')) return 'PY-ASU';
+            if(s.includes('concepcion')) return 'PY-1';
+            if(s.includes('san pedro')) return 'PY-2';
+            if(s.includes('cordillera')) return 'PY-3';
+            if(s.includes('guaira')) return 'PY-4';
+            if(s.includes('caaguazu')) return 'PY-5';
+            if(s.includes('caazapa')) return 'PY-6';
+            if(s.includes('itapua')) return 'PY-7';
+            if(s.includes('misiones')) return 'PY-8';
+            if(s.includes('paraguari')) return 'PY-9';
+            if(s.includes('alto parana')) return 'PY-10';
+            if(s.includes('central')) return 'PY-11';
+            if(s.includes('neembucu')) return 'PY-12';
+            if(s.includes('amambay')) return 'PY-13';
+            if(s.includes('canindeyu')) return 'PY-14';
+            if(s.includes('hayes')) return 'PY-15';
+            if(s.includes('alto paraguay')) return 'PY-16';
+            if(s.includes('boqueron')) return 'PY-19';
+            
+            // Si todo falla, intenta buscar el [PY-XX]
+            let match = str.match(/(PY-[A-Z0-9]+)/i);
+            return match ? match[1].toUpperCase() : 'OTROS';
+          };
+
+          // Nombres bonitos para la lista visual
+          const nombresOficiales = {
+            'PY-ASU': 'Asunción', 'PY-1': 'Concepción', 'PY-2': 'San Pedro', 'PY-3': 'Cordillera',
+            'PY-4': 'Guairá', 'PY-5': 'Caaguazú', 'PY-6': 'Caazapá', 'PY-7': 'Itapúa',
+            'PY-8': 'Misiones', 'PY-9': 'Paraguarí', 'PY-10': 'Alto Paraná', 'PY-11': 'Central',
+            'PY-12': 'Ñeembucú', 'PY-13': 'Amambay', 'PY-14': 'Canindeyú', 'PY-15': 'Pte. Hayes',
+            'PY-16': 'Alto Paraguay', 'PY-19': 'Boquerón', 'OTROS': 'Sin Clasificar'
+          };
+
+          // 2. Agrupación Matemática Exacta
+          const deptosMap = {};
+          let totalSuma = 0;
+
+          db.value.ubicaciones.forEach(u => {
+            if (String(u.estado_actual || '').trim().toLowerCase() === 'activo') {
+              const iso = getIsoPY(u.departamento);
+              if (!deptosMap[iso]) deptosMap[iso] = 0;
+              deptosMap[iso]++;
+              totalSuma++;
+            }
+          });
+
+          // 3. Preparamos el HTML para la columna derecha (Lista)
+          const chartRows = [];
+          let htmlLista = '';
+          const sortedKeys = Object.keys(deptosMap).sort((a,b) => deptosMap[b] - deptosMap[a]);
+          
+          sortedKeys.forEach(iso => {
+            if(iso !== 'OTROS') {
+              chartRows.push([{ v: iso, f: nombresOficiales[iso] }, deptosMap[iso]]);
+            }
+            htmlLista += `
+              <div class="d-flex justify-content-between border-bottom py-2 small">
+                <span class="text-dark">${nombresOficiales[iso]}</span>
+                <span class="fw-bold text-primary">${deptosMap[iso]}</span>
+              </div>`;
+          });
+
+          // 4. Renderizamos un Modal Híbrido (Mapa a la izquierda, Datos a la derecha)
+          Swal.fire({
+            title: '<i class="bi bi-geo-alt-fill text-primary me-2"></i>Cobertura Nacional',
+            html: `
+              <div class="row text-start mt-3">
+                <div class="col-md-7 border-end">
+                  <div id="paraguay_map_div" style="width: 100%; height: 350px; display: flex; align-items: center; justify-content: center;">
+                    <div class="spinner-border text-primary" role="status"></div>
+                  </div>
+                </div>
+                
+                <div class="col-md-5" style="max-height: 350px; overflow-y: auto; overflow-x: hidden;">
+                  <div class="alert alert-primary py-2 text-center mb-3">
+                    <h5 class="fw-bold mb-0">${totalSuma} Centros Activos</h5>
+                  </div>
+                  <div class="pe-2">
+                    ${htmlLista}
+                  </div>
+                  <div class="small text-muted mt-3" style="font-size: 0.7rem; line-height: 1.2;">
+                    * <strong>Nota:</strong> Asunción (PY-ASU) es graficado por Google como un punto dentro de Central.
+                  </div>
+                </div>
+              </div>
+            `,
+            width: '850px',
+            confirmButtonText: 'Cerrar Vista',
+            confirmButtonColor: '#243F5C',
+            didOpen: () => {
+              google.charts.load('current', { 'packages': ['geochart'] });
+              google.charts.setOnLoadCallback(() => {
+                // Forzamos el tipo de dato para evitar fallos silenciosos de Google
+                const data = new google.visualization.DataTable();
+                data.addColumn('string', 'Departamento');
+                data.addColumn('number', 'Centros');
+                data.addRows(chartRows);
+
+                const options = {
+                  region: 'PY', 
+                  resolution: 'provinces',
+                  colorAxis: { colors: ['#cce5ff', '#0d6efd', '#084298'] },
+                  backgroundColor: 'transparent',
+                  datalessRegionColor: '#f8f9fa',
+                  defaultColor: '#f5f5f5',
+                  keepAspectRatio: true
+                };
+
+                const chart = new google.visualization.GeoChart(document.getElementById('paraguay_map_div'));
+                chart.draw(data, options);
+              });
+            }
+          });
+        };
+
+        // Helpers para las tablas del Dashboard
+        const getEquipoInfoDash = (id) => db.value.equipos?.find(e => String(e.id_registro) === String(id)) || {};
+        const calcularDiasRestantes = (vencimiento) => {
+          const diffTime = Math.abs(new Date(vencimiento) - new Date());
+          return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        };
+
+        // Motor de Renderizado de Gráficos (Chart.js)
+        const renderCharts = () => {
+          if (currentView.value !== 'DASHBOARD' || !db.value.equipos) return;
+          
+          Vue.nextTick(() => {
+            // ---- GRÁFICO 1: ESTADO LEGAL (Doughnut) ----
+            const ctxE = document.getElementById('estadoChart');
+            if (ctxE) {
+              if (chartEstado) chartEstado.destroy();
+              const estados = { 'Homologado': 0, 'No Homologado': 0};
+              db.value.equipos.forEach(e => { estados[e.estado_homologacion || 'Sin Homologar']++; });
+              
+              chartEstado = new Chart(ctxE, {
+                type: 'doughnut',
+                data: {
+                  labels: Object.keys(estados),
+                  datasets: [{ data: Object.values(estados), backgroundColor: ['#84B74C', '#dc3545', '#6c757d'], borderWidth: 0 }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+              });
+            }
+
+            // ---- GRÁFICO 2: DEPARTAMENTOS (Bar) ----
+            const ctxD = document.getElementById('deptoChart');
+            if (ctxD) {
+              if (chartDepto) chartDepto.destroy();
+              const deptos = {};
+              db.value.ubicaciones.filter(u => u.estado_actual === 'Activo').forEach(u => {
+                let nom = u.departamento.replace(/\[PY-\d+\]\s*/, ''); // Limpiar código PY
+                deptos[nom] = (deptos[nom] || 0) + 1;
+              });
+              // Ordenar top 10
+              const sortedDeptos = Object.entries(deptos).sort((a,b) => b[1]-a[1]).slice(0, 15);
+              
+              chartDepto = new Chart(ctxD, {
+                type: 'bar',
+                data: {
+                  labels: sortedDeptos.map(d => d[0]),
+                  datasets: [{ label: 'Centros Activos', data: sortedDeptos.map(d => d[1]), backgroundColor: '#243F5C', borderRadius: 4 }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+              });
+            }
+          });
+        };
+
+        // Escuchador reactivo: Cuando cambia la vista al Dashboard o se actualiza la DB, redibuja gráficos.
+        watch([currentView, db], () => { renderCharts(); }, { deep: true });
+
+        // =====================================
         // OBJETO DE RETORNO FINAL
         // =====================================
         return {
@@ -1683,7 +2024,9 @@
           
           showEquipoForm, isEditingEq, formEq, isFormEqValid, openEquipoForm, submitEquipo, deleteEquipo, getEmpresaNombre, getEquipoMarca, searchEq, filterEmpresaEq, filterEstadoEq, filteredEquipos, estadosEquipoList,
           
-          showUbiForm, formUbi, deptosList, distritosFiltrados, isFormUbiValid, openUbiForm, submitUbi, getEquipoEmpresa, getEquipoUbicacion, searchUbi, filterEmpresaUbi, filterDepartamentoUbi, filterEstadoUbi, filteredUbicaciones, viewUbiDetails, tienePermiso, esEditor
+          showUbiForm, formUbi, deptosList, distritosFiltrados, isFormUbiValid, openUbiForm, submitUbi, getEquipoEmpresa, getEquipoUbicacion, searchUbi, filterEmpresaUbi, filterDepartamentoUbi, filterEstadoUbi, filteredUbicaciones, viewUbiDetails, tienePermiso, esEditor,
+
+          kpiEquipos, kpiRiesgo, kpiUbicaciones, kpiEmpresas,getEquipoInfoDash, calcularDiasRestantes, mostrarCoberturaNacional
         };
       }
     }).mount('#app');
