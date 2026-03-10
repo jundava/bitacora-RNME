@@ -75,7 +75,7 @@
     #sidebar ul li a i { font-size: 1.2rem; width: 30px; display: inline-block; text-align: center; }
     
     #content {
-      width: 100%;
+      width: calc(100% - 250px); 
       padding: 0;
       min-height: 100vh;
       transition: all 0.3s;
@@ -87,7 +87,7 @@
     @media (max-width: 768px) {
       #sidebar { margin-left: -250px; }
       #sidebar.active { margin-left: 0; }
-      #content { margin-left: 0; }
+      #content { margin-left: 0; width: 100%; } /* CORRECCIÓN: Restaurar a 100% en pantallas chicas */
       .overlay-mobile { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 1030; display: none; }
       .overlay-mobile.active { display: block; }
     }
@@ -129,7 +129,7 @@
 
       <div class="overlay-mobile" :class="{ 'active': isMobileMenuOpen }" @click="isMobileMenuOpen = false"></div>
 
-      <div id="content" :style="role === 'PUBLIC' ? 'margin-left: 0;' : ''">
+      <div id="content" :style="role === 'PUBLIC' ? 'margin-left: 0; width: 100%;' : ''">
 
         <div class="top-navbar mb-4">
           <div class="d-flex align-items-center">
@@ -258,10 +258,16 @@
                       </tr>
                     </thead>
                     <tbody>
-                      <tr v-for="res in kpiRiesgo.slice(0, 5)" :key="res.id_resolucion">
+                      <tr v-for="res in kpiRiesgo" :key="res.id_resolucion">
                         <td class="ps-4 fw-bold text-dark">{{ res.id_resolucion }}</td>
-                        <td><span class="badge bg-dark">{{ res.id_equipo_vinculado }}</span></td>
-                        <td class="small">{{ getEmpresaNombre(getEquipoInfoDash(res.id_equipo_vinculado).id_empresa) }}</td>
+                        <td>
+                          <span v-for="eqId in (res.equipos_vinculados || [])" :key="eqId" class="badge bg-dark me-1">
+                            {{ eqId }}
+                          </span>
+                        </td>
+                        <td class="small">
+                          {{ getEmpresaNombre(getEquipoInfoDash((res.equipos_vinculados || [])[0]).id_empresa) }}
+                        </td>
                         <td class="text-danger fw-bold">{{ res.vencimiento }}</td>
                         <td>
                           <span class="badge bg-warning text-dark border border-warning shadow-sm">
@@ -700,13 +706,6 @@
                             </div>
                           </div>
                         </div>
-
-                        <div class="col-12">
-                          <div class="p-3 border rounded shadow-sm bg-white">
-                            <label class="form-label fw-bold"><i class="bi bi-chat-left-text me-1 text-primary"></i>Observaciones / Notas Adicionales</label>
-                            <textarea class="form-control shadow-sm" v-model="formEq.descripcion" rows="3" placeholder="Ingrese cualquier nota relevante sobre el equipo, su estado o historial..."></textarea>
-                          </div>
-                        </div>
                     </div>
 
                     <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
@@ -782,13 +781,14 @@
           <div class="card-body">
             <div v-if="showUbiForm" class="p-4 rounded mb-4 shadow-sm border" style="background-color: #f8f9fa;">
               <h5 class="mb-4 fw-bold text-primary border-bottom pb-2">
-                <i class="bi bi-truck me-2"></i>Registrar Movimiento de Equipo
+                <i :class="isEditingUbi ? 'bi bi-pencil-square' : 'bi bi-truck'" class="me-2"></i>
+                {{ isEditingUbi ? 'Editar Registro de Ubicación' : 'Registrar Movimiento de Equipo' }}
               </h5>
               
               <div class="row g-4">
                 <div class="col-12">
                   <label class="form-label fw-bold text-dark">1. Seleccione el Equipo <span class="text-danger">*</span></label>
-                  <select class="form-select form-select-lg border-primary shadow-sm" v-model="formUbi.id_equipo">
+                  <select class="form-select form-select-lg border-primary shadow-sm" v-model="formUbi.id_equipo" :disabled="isEditingUbi">
                     <option value="" disabled>Elegir equipo de la lista...</option>
                     <option v-for="eq in db.equipos" :key="eq.id_registro" :value="eq.id_registro">
                       {{ eq.id_registro }} - {{ eq.marca }} ({{ getEmpresaNombre(eq.id_empresa) }})
@@ -867,7 +867,7 @@
               <div class="mt-4 d-flex justify-content-end gap-2">
                 <button class="btn btn-outline-secondary px-4" @click="showUbiForm = false">Cancelar</button>
                 <button class="btn btn-primary px-4 shadow" @click="submitUbi" :disabled="!isFormUbiValid">
-                  <i class="bi bi-save me-2"></i>Confirmar Nuevo Traslado
+                  <i class="bi bi-save me-2"></i>{{ isEditingUbi ? 'Guardar Cambios' : 'Confirmar Nuevo Traslado' }}
                 </button>
               </div>
             </div>
@@ -920,7 +920,9 @@
                       </td>
 
                       <td class="text-center">
-                        <button class="btn btn-sm btn-outline-secondary" @click="viewUbiDetails(u)" title="Ver Detalles"><i class="bi bi-eye"></i></button>
+                        <button class="btn btn-sm btn-outline-secondary me-1" @click="viewUbiDetails(u)" title="Ver Detalles"><i class="bi bi-eye"></i></button>
+                        <button v-if="esEditor('Ubicaciones')" class="btn btn-sm btn-outline-primary me-1" @click="openUbiForm(u)" title="Editar"><i class="bi bi-pencil-square"></i></button>
+                        <button v-if="esEditor('Ubicaciones')" class="btn btn-sm btn-outline-danger" @click="deleteUbicacion(u.id_ubicacion)" title="Eliminar"><i class="bi bi-trash3"></i></button>
                       </td>
                     </tr>
                   </tbody>
@@ -1319,20 +1321,19 @@
 
       const groupedResoluciones = computed(() => {
         if (!db.value.resoluciones) return [];
-        const map = new Map();
-        db.value.resoluciones.forEach(r => {
-          if (!r) return;
-          if (!map.has(r.id_resolucion)) {
-            map.set(r.id_resolucion, { 
-              id_resolucion: r.id_resolucion, tipo_acto: r.tipo_acto, afecta: r.afecta, 
-              fecha_emision: r.fecha_emision, vencimiento: r.vencimiento, estado: r.estado, url_drive: r.url_drive, equipos: [] 
-            });
-          }
-          if (r.id_equipo_vinculado && !map.get(r.id_resolucion).equipos.includes(r.id_equipo_vinculado)) {
-            map.get(r.id_resolucion).equipos.push(r.id_equipo_vinculado);
-          }
-        });
-        return Array.from(map.values());
+        
+        // Como Firestore ya nos da los datos agrupados nativamente, 
+        // solo mapeamos los nombres de las propiedades para que la vista HTML siga funcionando intacta.
+        return db.value.resoluciones.map(r => ({
+          id_resolucion: r.id_resolucion,
+          tipo_acto: r.tipo_acto,
+          afecta: r.afecta,
+          fecha_emision: r.fecha_emision,
+          vencimiento: r.vencimiento,
+          estado: r.estado,
+          url_drive: r.url_drive,
+          equipos: r.equipos_vinculados || [] // <-- Tomamos el Array nativo de Firestore
+        }));
       });
 
       const resolucionesMadreList = computed(() => {
@@ -1532,7 +1533,7 @@
             if (result.isConfirmed) {
               isLoading.value = true; loadingMessage.value = "Eliminando...";
               google.script.run
-                .withSuccessHandler(() => { Swal.fire('Eliminado', 'Equipo borrado.', 'success'); refreshDataSilent(); })
+                .withSuccessHandler(() => { isLoading.value = false; Swal.fire('Eliminado', 'Equipo borrado.', 'success'); refreshDataSilent(); })
                 .withFailureHandler(err => { isLoading.value = false; Swal.fire('Acción Bloqueada', err.message, 'error'); })
                 .deleteEquipoTransaction(id_registro);
             }
@@ -1630,7 +1631,8 @@
         // MÓDULO UBICACIONES
         // =====================================
         const showUbiForm = ref(false);
-        const formUbi = ref({ id_equipo: "", departamento: "", distrito: "", competencia: "Distrital", lugar_especifico: "", estado_actual: "Activo" });
+        const isEditingUbi = ref(false); // NUEVO: Control reactivo de edición
+        const formUbi = ref({ id_ubicacion: "", id_equipo: "", departamento: "", distrito: "", competencia: "Distrital", lugar_especifico: "", estado_actual: "Activo", isUpdate: false });
 
         const deptosList = computed(() => db.value.catalogos ? db.value.catalogos.filter(c => c.categoria === 'DEPARTAMENTO') : []);
         const distritosFiltrados = computed(() => {
@@ -1640,7 +1642,27 @@
         });
 
         const isFormUbiValid = computed(() => formUbi.value.id_equipo && formUbi.value.departamento && formUbi.value.distrito && formUbi.value.lugar_especifico);
-        const openUbiForm = () => { formUbi.value = { id_equipo: "", departamento: "", distrito: "", competencia: "Distrital", lugar_especifico: "", estado_actual: "Activo" }; showUbiForm.value = true; };
+        
+        // MODIFICADO: Capacidad para recibir un objeto y poblar el formulario para edición
+        const openUbiForm = (ubi = null) => { 
+          if (ubi) {
+            isEditingUbi.value = true;
+            formUbi.value = { 
+              id_ubicacion: ubi.id_ubicacion, 
+              id_equipo: ubi.id_equipo, 
+              departamento: ubi.departamento, 
+              distrito: ubi.distrito, 
+              competencia: ubi.competencia, 
+              lugar_especifico: ubi.lugar_especifico, 
+              estado_actual: ubi.estado_actual,
+              isUpdate: true 
+            };
+          } else {
+            isEditingUbi.value = false;
+            formUbi.value = { id_ubicacion: "", id_equipo: "", departamento: "", distrito: "", competencia: "Distrital", lugar_especifico: "", estado_actual: "Activo", isUpdate: false }; 
+          }
+          showUbiForm.value = true; 
+        };
         
         const getEquipoEmpresa = (id_equipo) => { const eq = db.value.equipos.find(e => e.id_registro === id_equipo); return eq ? getEmpresaNombre(eq.id_empresa) : 'No identificada'; };
         
@@ -1651,9 +1673,7 @@
         };
 
         const viewUbiDetails = (u) => {
-          // Si tiene fecha de cierre, preparamos el texto, si no, ponemos "En curso"
           const cierreInfo = u.fecha_cierre ? `<b>Fecha de Cierre:</b> ${u.fecha_cierre}` : `<b>Fecha de Cierre:</b> <span class="text-success">Vigente / En curso</span>`;
-
           Swal.fire({
             title: '<i class="bi bi-info-square-fill text-primary"></i> Detalles del Registro',
             html: `
@@ -1670,9 +1690,37 @@
           });
         };
 
+        // NUEVA FUNCIÓN: Eliminar Ubicación
+        const deleteUbicacion = (id_ubicacion) => {
+          Swal.fire({ 
+            title: '¿Eliminar Registro?', 
+            text: "Se borrará este historial de ubicación. Esta acción no se puede deshacer.", 
+            icon: 'warning', 
+            showCancelButton: true, 
+            confirmButtonColor: '#d33', 
+            confirmButtonText: 'Sí, Eliminar' 
+          }).then((result) => {
+            if (result.isConfirmed) {
+              isLoading.value = true; 
+              loadingMessage.value = "Eliminando registro...";
+              google.script.run
+                .withSuccessHandler(() => { 
+                  isLoading.value = false; 
+                  Swal.fire('Eliminado', 'Registro borrado.', 'success'); 
+                  refreshDataSilent(); 
+                })
+                .withFailureHandler(err => { 
+                  isLoading.value = false; 
+                  Swal.fire('Acción Bloqueada', err.message, 'error'); 
+                })
+                .deleteUbicacionTransaction(id_ubicacion);
+            }
+          });
+        };
+
         const submitUbi = () => {
-          // VALIDACIÓN DE DUPLICADOS:
-          if (ubicacionActualSeleccionada.value) {
+          // VALIDACIÓN DE DUPLICADOS (Solo salta si NO estamos editando)
+          if (!isEditingUbi.value && ubicacionActualSeleccionada.value) {
             const uAct = ubicacionActualSeleccionada.value;
             const uNew = formUbi.value;
 
@@ -1683,7 +1731,7 @@
 
             if (esMismaUbicacion) {
               Swal.fire({
-                title: 'Ubicación Identica',
+                title: 'Ubicación Idéntica',
                 text: 'El equipo ya se encuentra registrado en esa ubicación exacta. No es necesario realizar el movimiento.',
                 icon: 'info',
                 confirmButtonColor: '#243F5C'
@@ -1692,13 +1740,12 @@
             }
           }
 
-          // Si pasa la validación, procede con el guardado normal
           isLoading.value = true;
-          loadingMessage.value = "Actualizando ubicación...";
+          loadingMessage.value = isEditingUbi.value ? "Actualizando datos..." : "Registrando movimiento...";
           google.script.run
             .withSuccessHandler(() => { 
               isLoading.value = false;
-              Swal.fire('Éxito', 'Ubicación establecida correctamente.', 'success'); 
+              Swal.fire('Éxito', isEditingUbi.value ? 'Ubicación actualizada.' : 'Traslado registrado.', 'success'); 
               showUbiForm.value = false; 
               refreshDataSilent(); 
             })
@@ -2016,7 +2063,7 @@
           
           activeConfigTab, isEditingConfig, formConfig, toggleEditConfig, submitConfig, ubicacionActualSeleccionada, getEquipoEstadoLegal,
 
-          showUserForm, isEditingUser, modulosDisponibles, formUser, isFormUserValid, generateAvatar, openUserForm, submitUser, deleteUser,
+          showUserForm, isEditingUser, modulosDisponibles, formUser, isFormUserValid, generateAvatar, openUserForm, submitUser, deleteUser, isEditingUbi, deleteUbicacion, 
           
           formRes, isFormResValid, triggerFileInput, handleFileUpload, submitResolucion, activeResTab, searchRes, filterTipoActoRes, filterEstadoRes, groupedResoluciones, filteredResoluciones, estadosResolucionList, isEditingRes, openEditRes, getDistritosPorDepto, resolucionesMadreList,
           

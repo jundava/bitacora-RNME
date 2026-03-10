@@ -1,32 +1,20 @@
 /**
  * ============================================================================
- * SISTEMA: Bitácora RNME (Registro Nacional de Medios de Examen Electrónicos)
- * ARQUITECTURA: Backend Serverless (Google Apps Script)
+ * SISTEMA: Bitácora RNME - ANTSV
+ * ARQUITECTURA: Backend Serverless (Google Apps Script) + Firestore (NoSQL)
  * ============================================================================
  */
 
-const SCHEMA = {
-  T_USUARIOS: { sheetName: "APP_USUARIOS", columns: ["email", "rol", "permisos", "estado", "ultimo_acceso", "avatar"] },
-  T_EMPRESAS: { sheetName: "APP_EMPRESAS", columns: ["id_empresa", "razon_social", "ruc", "representante", "email", "direccion", "tipo_entidad", "actividad_principal"] },
-  T_EQUIPOS: { sheetName: "APP_EQUIPOS", columns: ["id_registro", "id_empresa", "descripcion","marca", "serial_psicométrico", "serial_sensométrico", "estado_homologacion"] },
-  T_RESOLUCIONES: { sheetName: "APP_RESOLUCIONES", columns: ["id_resolucion", "tipo_acto", "afecta", "fecha_emision", "vencimiento", "estado", "url_drive", "qr", "id_equipo_vinculado"] },
-  T_UBICACIONES: { sheetName: "APP_UBICACIONES", columns: ["id_ubicacion", "id_equipo", "departamento", "distrito", "competencia","lugar_especifico", "estado_actual", "fecha_cierre"] },
-  T_CONFIGURACION: { sheetName: "APP_CONFIGURACION", columns: ["clave", "valor", "descripcion", "ultima_modificacion"] },
-  T_AUDITORIA: { sheetName: "APP_AUDITORIA", columns: ["id_log", "fecha_hora", "usuario_email", "accion", "tabla_afectada", "detalle_cambio"] },
-  T_CATALOGOS: { sheetName: "APP_CATALOGOS", columns: ["id_catalogo", "categoria", "valor", "padre_id", "estado"] }
-};
+function doGet(e) {
+  return HtmlService.createHtmlOutputFromFile('Index')
+    .setTitle('Bitácora RNME - ANTSV')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
 
-function setupDatabase() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  Object.keys(SCHEMA).forEach(key => {
-    const table = SCHEMA[key];
-    let sheet = ss.getSheetByName(table.sheetName);
-    if (!sheet) sheet = ss.insertSheet(table.sheetName);
-    const headerRange = sheet.getRange(1, 1, 1, table.columns.length);
-    headerRange.setValues([table.columns]).setFontWeight("bold").setBackground("#444444").setFontColor("#FFFFFF").setHorizontalAlignment("center");
-    sheet.setFrozenRows(1);
-    sheet.autoResizeColumns(1, table.columns.length);
-  });
+// ================= UTILIDADES Y CONEXIÓN CORE =================
+function getLogoBase64() {
+  return "https://i.postimg.cc/SxmBF7N1/Bitacora-Logo.png";
 }
 
 function runWithRetry(fn, ...args) {
@@ -42,70 +30,101 @@ function runWithRetry(fn, ...args) {
   }
 }
 
+// ================= CAPA DE ACCESO A DATOS (FIRESTORE) =================
+function getCollectionData(collectionName) {
+  const db = getFirestore();
+  try {
+    const documents = db.getDocuments(collectionName);
+    return documents.map(doc => unwrapFirestoreDoc(doc));
+  } catch(e) {
+    console.warn(`Colección ${collectionName} vacía o no encontrada.`);
+    return [];
+  }
+}
+
+// ================= SEGURIDAD Y AUDITORÍA =================
 function authenticateUser() {
   const email = Session.getActiveUser().getEmail();
   if (!email) return "PUBLIC";
+  
   const cache = CacheService.getScriptCache();
   const cachedRole = cache.get(`AUTH_${email}`);
   if (cachedRole) return cachedRole;
 
   return runWithRetry(() => {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName("APP_USUARIOS");
-    if (!sheet || sheet.getLastRow() < 2) return "PUBLIC";
-    
-    // CORRECCIÓN 1: Traemos 6 columnas (hasta la F, donde está el avatar)
-    const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 6).getValues(); 
-    
-    for (let i = 0; i < data.length; i++) {      
-      // data[i][0] = email (Col A) | data[i][3] = estado (Col D)
-      if (String(data[i][0]).trim().toLowerCase() === email.toLowerCase() && String(data[i][3]).trim().toUpperCase() === "ACTIVO") {
-        const dbRol = String(data[i][1]).trim().toUpperCase();
-        cache.put(`AUTH_${email}`, dbRol, 1800);
+    const db = getFirestore();
+    try {
+      const docId = email.trim().toLowerCase().replace(/\//g, '_'); 
+      const doc = db.getDocument(`APP_USUARIOS/${docId}`);
+      const user = unwrapFirestoreDoc(doc);
+      
+      if (user && String(user.estado).trim().toUpperCase() === "ACTIVO") {
+        const dbRol = String(user.rol).trim().toUpperCase();
+        cache.put(`AUTH_${email}`, dbRol, 1800); 
         
-        // CORRECCIÓN 2: Escribimos el último acceso en la columna 5 (Col E)
-        try { sheet.getRange(i + 2, 5).setValue(new Date().toISOString()); } catch (e) {}
-        
+        user.ultimo_acceso = new Date().toISOString();
+        db.updateDocument(`APP_USUARIOS/${docId}`, user);
         return dbRol;
       }
-    }
+    } catch (e) {}
     return "PUBLIC";
   });
+}
+
+function requerirEditor(modulo) {
+  const email = Session.getActiveUser().getEmail();
+  try {
+    const docId = email.trim().toLowerCase().replace(/\//g, '_'); 
+    const db = getFirestore();
+    const doc = db.getDocument(`APP_USUARIOS/${docId}`);
+    const user = unwrapFirestoreDoc(doc);
+    
+    if (String(user.rol).trim().toUpperCase() === "ADMIN") return true; 
+    
+    let permisos = user.permisos;
+    if (typeof permisos === 'string') permisos = JSON.parse(permisos);
+    
+    if (permisos.roles && permisos.roles.includes('Todos')) return true;
+    if (permisos[modulo] === 'Editor') return true;
+  } catch(e) {}
+  
+  throw new Error("ACCESO DENEGADO: No tienes permisos de Editor para el módulo " + modulo);
 }
 
 function logAuditActivity(accion, tabla_afectada, detalle_cambio) {
   try {
     const email = Session.getActiveUser().getEmail() || "Sistema Público";
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("APP_AUDITORIA");
-    if (sheet) {
-      const id_log = "LOG-" + Utilities.getUuid();
-      const detalleStr = typeof detalle_cambio === 'object' ? JSON.stringify(detalle_cambio) : detalle_cambio;
-      sheet.appendRow([id_log, new Date().toISOString(), email, accion, tabla_afectada, detalleStr]);
-    }
+    const db = getFirestore();
+    const id_log = "LOG-" + Utilities.getUuid();
+    const detalleStr = typeof detalle_cambio === 'object' ? JSON.stringify(detalle_cambio) : detalle_cambio;
+    
+    db.updateDocument(`APP_AUDITORIA/${id_log}`, {
+      id_log: id_log,
+      fecha_hora: new Date().toISOString(),
+      usuario_email: email,
+      accion: accion,
+      tabla_afectada: tabla_afectada,
+      detalle_cambio: detalleStr
+    });
   } catch (e) {}
 }
 
-function doGet(e) {
-  return HtmlService.createHtmlOutputFromFile('Index')
-    .setTitle('Bitácora RNME - ANTSV')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
-}
-
+// ================= INICIALIZACIÓN DEL FRONTEND =================
 function getInitialPayload() {
   return runWithRetry(() => {
     const userRole = authenticateUser();
-    const rawConfig = getTableData("APP_CONFIGURACION");
+    
+    const rawConfig = getCollectionData("APP_CONFIGURACION");
     const appConfig = {};
     rawConfig.forEach(row => { appConfig[row.clave] = row.valor; });
     
     const db = {
-      equipos: getTableData("APP_EQUIPOS"),
-      ubicaciones: getTableData("APP_UBICACIONES"),
-      resoluciones: getTableData("APP_RESOLUCIONES"),
-      empresas: userRole !== "PUBLIC" ? getTableData("APP_EMPRESAS") : [],
-      usuarios: userRole !== "PUBLIC" ? getTableData("APP_USUARIOS") : [],
-      catalogos: getTableData("APP_CATALOGOS"),
+      equipos: getCollectionData("APP_EQUIPOS"),
+      ubicaciones: getCollectionData("APP_UBICACIONES"),
+      resoluciones: getCollectionData("APP_RESOLUCIONES"),
+      empresas: userRole !== "PUBLIC" ? getCollectionData("APP_EMPRESAS") : [],
+      usuarios: userRole !== "PUBLIC" ? getCollectionData("APP_USUARIOS") : [],
+      catalogos: getCollectionData("APP_CATALOGOS"),
       configuracion: appConfig,
       configuracion_raw: rawConfig,
       logoBase64: getLogoBase64() 
@@ -120,135 +139,248 @@ function getInitialPayload() {
         data: { 
           equipos: eqVigentes, 
           ubicaciones: db.ubicaciones.filter(u => u.estado_actual === "Activo" && ids.includes(u.id_equipo)),
-          logoBase64: db.logoBase64 // También lo enviamos a la vista pública
+          logoBase64: db.logoBase64
         } 
       });
     }
+    
     return JSON.stringify({ role: userRole, user: Session.getActiveUser().getEmail() || "Invitado", data: db });
   });
 }
 
-function getTableData(sheetName) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
-  if (!sheet || sheet.getLastRow() < 2) return [];
-  const data = sheet.getDataRange().getValues();
-  const headers = data.shift();
-  return data.map(row => {
-    let obj = {};
-    headers.forEach((header, i) => {
-      obj[header] = row[i] instanceof Date ? row[i].toISOString().split('T')[0] : row[i];
-    });
-    return obj;
+// ================= GESTOR DE EMPRESAS =================
+function saveEmpresaTransaction(p) {
+  return runWithRetry(() => {
+    requerirEditor("Empresas");
+    const db = getFirestore();
+    const docId = String(p.id_empresa).toUpperCase().trim();
+    const docPath = `APP_EMPRESAS/${docId}`;
+    
+    const payload = {
+      id_empresa: docId, razon_social: p.razon_social, ruc: p.ruc, 
+      representante: p.representante, email: p.email, direccion: p.direccion, 
+      tipo_entidad: p.tipo_entidad, actividad_principal: p.actividad_principal
+    };
+
+    if (p.isUpdate) { 
+      db.updateDocument(docPath, payload); 
+      logAuditActivity("UPDATE", "APP_EMPRESAS", docId); 
+    } else { 
+      try {
+        db.getDocument(docPath);
+        throw new Error("El ID de la empresa ya existe.");
+      } catch (e) {
+        if(e.message.includes("ya existe")) throw e;
+        db.updateDocument(docPath, payload); 
+        logAuditActivity("CREATE", "APP_EMPRESAS", docId); 
+      }
+    }
+    return true;
   });
 }
 
-// ================= MOTOR DE SEGURIDAD BACKEND =================
-function requerirEditor(modulo) {
-  const email = Session.getActiveUser().getEmail();
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("APP_USUARIOS");
-  const data = sheet.getDataRange().getValues();
-  
-  for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]).trim().toLowerCase() === email.toLowerCase()) {
-      const rol = String(data[i][1]).trim().toUpperCase();
-      if (rol === "ADMIN") return true; // Administrador pasa directo
-      
+function deleteEmpresaTransaction(id) {
+  return runWithRetry(() => {
+    requerirEditor("Empresas");
+    const db = getFirestore();
+    const equipos = getCollectionData("APP_EQUIPOS");
+    if (equipos.some(eq => eq.id_empresa === id)) throw new Error(`La empresa ${id} tiene Equipos vinculados.`);
+    
+    db.deleteDocument(`APP_EMPRESAS/${id}`);
+    logAuditActivity("DELETE", "APP_EMPRESAS", id); 
+    return true;
+  });
+}
+
+// ================= GESTOR DE EQUIPOS =================
+function saveEquipoTransaction(p) {
+  return runWithRetry(() => {
+    requerirEditor("Equipos");
+    const db = getFirestore();
+    let fId = p.id_registro;
+
+    if (!p.isUpdate) {
+      let configDoc;
       try {
-        const permisos = JSON.parse(data[i][2]);
-        if (permisos.roles && permisos.roles.includes('Todos')) return true;
-        if (permisos[modulo] === 'Editor') return true;
-      } catch(e) {}
-      break;
+        configDoc = unwrapFirestoreDoc(db.getDocument("APP_CONFIGURACION/NUMERACION_EQUIPOS"));
+      } catch(e) {
+        configDoc = { clave: "NUMERACION_EQUIPOS", valor: "ESP000", descripcion: "Secuencia Autonumérica" };
+      }
+      const curr = configDoc.valor || "ESP000";
+      fId = "ESP" + String((parseInt(curr.replace("ESP", "")) || 0) + 1).padStart(3, '0');
+      
+      configDoc.valor = fId;
+      configDoc.ultima_modificacion = new Date().toISOString();
+      db.updateDocument("APP_CONFIGURACION/NUMERACION_EQUIPOS", configDoc);
     }
-  }
-  
-  // Si llega hasta aquí, no es Editor ni Admin
-  throw new Error("ACCESO DENEGADO: No tienes permisos de Editor para el módulo " + modulo);
+
+    const docPath = `APP_EQUIPOS/${fId}`;
+    const descripcionEstatica = `${fId}-${p.id_empresa}:[${p.serial_psicometrico}-${p.serial_sensometrico}]`;
+
+    const payload = {
+      id_registro: fId, id_empresa: p.id_empresa, descripcion: descripcionEstatica, 
+      marca: p.marca, serial_psicometrico: p.serial_psicometrico, 
+      serial_sensometrico: p.serial_sensometrico, estado_homologacion: p.estado_homologacion || ""
+    };
+
+    if (p.isUpdate) { 
+      db.updateDocument(docPath, payload); 
+      logAuditActivity("UPDATE", "APP_EQUIPOS", fId); 
+    } else { 
+      try {
+        db.getDocument(docPath);
+        throw new Error("El ID de equipo ya existe.");
+      } catch(e) {
+        if(e.message.includes("ya existe")) throw e;
+        db.updateDocument(docPath, payload); 
+        logAuditActivity("CREATE", "APP_EQUIPOS", fId); 
+      }
+    }
+    return true;
+  });
+}
+
+function deleteEquipoTransaction(id) {
+  return runWithRetry(() => {
+    requerirEditor("Equipos");
+    const db = getFirestore();
+    const resoluciones = getCollectionData("APP_RESOLUCIONES");
+    const ubicaciones = getCollectionData("APP_UBICACIONES");
+    
+    if (resoluciones.some(r => r.equipos_vinculados && r.equipos_vinculados.includes(id))) throw new Error("El equipo tiene Resoluciones.");
+    if (ubicaciones.some(u => u.id_equipo === id)) throw new Error("El equipo tiene Ubicaciones.");
+    
+    db.deleteDocument(`APP_EQUIPOS/${id}`);
+    logAuditActivity("DELETE", "APP_EQUIPOS", id); 
+    return true;
+  });
+}
+
+// ================= GESTOR DE UBICACIONES =================
+function saveUbicacionTransaction(p) {
+  return runWithRetry(() => {
+    requerirEditor("Ubicaciones");
+    const db = getFirestore();
+    
+    // MODO EDICIÓN: Solo actualizamos los datos de texto de ese registro exacto
+    if (p.isUpdate) {
+      const docPath = `APP_UBICACIONES/${p.id_ubicacion}`;
+      const existingDoc = unwrapFirestoreDoc(db.getDocument(docPath));
+      
+      existingDoc.departamento = p.departamento;
+      existingDoc.distrito = p.distrito;
+      existingDoc.competencia = p.competencia;
+      existingDoc.lugar_especifico = p.lugar_especifico;
+      
+      db.updateDocument(docPath, existingDoc);
+      logAuditActivity("UPDATE", "APP_UBICACIONES", p.id_ubicacion);
+      return true;
+    } 
+    // MODO CREACIÓN (Traslado): Archiva el activo anterior y crea uno nuevo
+    else {
+      const ubicaciones = getCollectionData("APP_UBICACIONES");
+      const hoy = new Date().toISOString().split('T')[0];
+
+      const activas = ubicaciones.filter(u => u.id_equipo === p.id_equipo && u.estado_actual === "Activo");
+      
+      activas.forEach(uActiva => {
+        if (uActiva.departamento === p.departamento && uActiva.distrito === p.distrito && uActiva.lugar_especifico === p.lugar_especifico) {
+          throw new Error("El equipo ya se encuentra en esta ubicación exacta.");
+        }
+        uActiva.estado_actual = "Histórico";
+        uActiva.fecha_cierre = hoy;
+        db.updateDocument(`APP_UBICACIONES/${uActiva.id_ubicacion}`, uActiva);
+      });
+
+      const newId = "UBI-" + Utilities.getUuid().substring(0,8).toUpperCase();
+      const payload = {
+        id_ubicacion: newId, id_equipo: p.id_equipo, departamento: p.departamento, 
+        distrito: p.distrito, competencia: p.competencia, lugar_especifico: p.lugar_especifico, 
+        estado_actual: p.estado_actual, fecha_cierre: ""
+      };
+      
+      db.updateDocument(`APP_UBICACIONES/${newId}`, payload);
+      logAuditActivity("CREATE", "APP_UBICACIONES", p.id_equipo); 
+      return true;
+    }
+  });
+}
+
+function deleteUbicacionTransaction(id_ubicacion) {
+  return runWithRetry(() => {
+    requerirEditor("Ubicaciones");
+    const db = getFirestore();
+    db.deleteDocument(`APP_UBICACIONES/${id_ubicacion}`);
+    logAuditActivity("DELETE", "APP_UBICACIONES", id_ubicacion); 
+    return true;
+  });
 }
 
 // ================= GESTOR DE RESOLUCIONES =================
 function processResolutionUpload(fileData, formData) {
   return runWithRetry(() => {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheetRes = ss.getSheetByName("APP_RESOLUCIONES");
-    const resData = sheetRes.getDataRange().getValues();
-
-    // 1. COMPROBACIÓN INICIAL DE DUPLICADOS (Antes de Drive)
+    requerirEditor("Resoluciones");
+    const db = getFirestore();
     const nuevoIdRes = String(formData.id_resolucion).trim().toUpperCase();
-    
-    // Recorremos la columna 0 (id_resolucion) de la hoja APP_RESOLUCIONES
-    for (let i = 1; i < resData.length; i++) {
-      if (String(resData[i][0]).trim().toUpperCase() === nuevoIdRes) {
-        throw new Error("La resolución " + formData.id_resolucion + " ya se encuentra registrada en el sistema.");
-      }
-    }
+    const docPath = `APP_RESOLUCIONES/${nuevoIdRes.replace(/\//g, '_')}`;
 
-    // 2. CONFIGURACIÓN Y SUBIDA A DRIVE
-    // Solo llegamos aquí si el ID no es duplicado
-    const config = getTableData("APP_CONFIGURACION");
-    const ubiConfig = config.find(c => c.clave === "UBI_RESOLUCIONES");
-    if (!ubiConfig || !ubiConfig.valor) throw new Error("Carpeta UBI_RESOLUCIONES no configurada.");
+    try {
+      db.getDocument(docPath);
+      throw new Error("La resolución " + formData.id_resolucion + " ya se encuentra registrada.");
+    } catch(e) { if(e.message.includes("registrada")) throw e; }
 
-    const folderId = (ubiConfig.valor.match(/folders\/([a-zA-Z0-9_-]+)/) || [])[1];
+    let folderId = "";
+    try {
+      const ubiConfig = unwrapFirestoreDoc(db.getDocument("APP_CONFIGURACION/UBI_RESOLUCIONES"));
+      folderId = (ubiConfig.valor.match(/folders\/([a-zA-Z0-9_-]+)/) || [])[1];
+    } catch(e) { throw new Error("Carpeta UBI_RESOLUCIONES no configurada."); }
+
     const driveFile = DriveApp.getFolderById(folderId).createFile(
       Utilities.newBlob(Utilities.base64Decode(fileData.base64), fileData.mimeType, fileData.nombre)
     );
     const fileUrl = driveFile.getUrl();
 
-    const sheetEq = ss.getSheetByName("APP_EQUIPOS");
-    const eqData = sheetEq.getDataRange().getValues();
-
-    // 3. LÓGICA DE FECHAS
     const fEmiStr = formData.fecha_emision;
     let fVenStr = formData.vencimiento;    
 
     if (formData.tipo_acto === "3-Cambio Ubicación") {
-      // Si es un traslado, heredamos vencimiento de la resolución madre
-      const resMadre = resData.find(r => r[0] === formData.afecta);
-      if (!resMadre) throw new Error("No se encontró la Resolución Anterior para heredar el vencimiento.");
-      fVenStr = new Date(resMadre[4]).toISOString().split('T')[0];
+      try {
+        const resMadre = unwrapFirestoreDoc(db.getDocument(`APP_RESOLUCIONES/${String(formData.afecta).replace(/\//g, '_')}`));
+        fVenStr = resMadre.vencimiento;
+      } catch(e) { throw new Error("No se encontró la Resolución Anterior para heredar el vencimiento."); }
     } 
     
     const equiposAfectados = Array.isArray(formData.id_equipo) ? formData.id_equipo : [formData.id_equipo];
-    const afectaId = formData.afecta || ""; 
     
-    // 4. INSERCIÓN EN APP_RESOLUCIONES Y ACTUALIZACIÓN DE EQUIPOS
+    const payloadRes = {
+      id_resolucion: formData.id_resolucion, tipo_acto: formData.tipo_acto, afecta: formData.afecta || "", 
+      fecha_emision: fEmiStr, vencimiento: fVenStr, estado: "Vigente", url_drive: fileUrl, qr: "", 
+      equipos_vinculados: equiposAfectados
+    };
+    db.updateDocument(docPath, payloadRes);
+
     equiposAfectados.forEach(eqId => {
-      sheetRes.appendRow([formData.id_resolucion, formData.tipo_acto, afectaId, fEmiStr, fVenStr, "Vigente", fileUrl, "", eqId]);
-      
-      // Si es Homologación o Renovación, ponemos el equipo como Homologado
       if(formData.tipo_acto !== "3-Cambio Ubicación") {
-        for (let i = 1; i < eqData.length; i++) {
-          if (String(eqData[i][0]).trim() === eqId) { 
-            sheetEq.getRange(i + 1, 7).setValue("Homologado"); 
-            break; 
-          }
+        try {
+          const eqDoc = unwrapFirestoreDoc(db.getDocument(`APP_EQUIPOS/${eqId}`));
+          eqDoc.estado_homologacion = "Homologado";
+          db.updateDocument(`APP_EQUIPOS/${eqId}`, eqDoc);
+        } catch(e){}
+      }
+      if (formData.ubicaciones_equipos && formData.ubicaciones_equipos[eqId]) {
+        const p = formData.ubicaciones_equipos[eqId];
+        if(p && p.departamento && p.distrito && p.lugar_especifico) {
+            getCollectionData("APP_UBICACIONES").filter(u => u.id_equipo === eqId && u.estado_actual === "Activo").forEach(u => {
+              u.estado_actual = "Histórico"; db.updateDocument(`APP_UBICACIONES/${u.id_ubicacion}`, u);
+            });
+            const uId = "UBI-" + Utilities.getUuid().substring(0,8).toUpperCase();
+            db.updateDocument(`APP_UBICACIONES/${uId}`, {
+              id_ubicacion: uId, id_equipo: eqId, departamento: p.departamento, distrito: p.distrito, 
+              competencia: p.competencia || "Distrital", lugar_especifico: p.lugar_especifico, estado_actual: "Activo", fecha_cierre: ""
+            });
         }
       }
     });
-
-    // 5. LÓGICA DE UBICACIONES UNIVERSAL
-    if (formData.ubicaciones_equipos && Object.keys(formData.ubicaciones_equipos).length > 0) {
-      const sheetUbi = ss.getSheetByName("APP_UBICACIONES");
-      const ubiData = sheetUbi.getDataRange().getValues();
-      equiposAfectados.forEach(eqId => {
-        const p = formData.ubicaciones_equipos[eqId];
-        if(p && p.departamento && p.distrito && p.lugar_especifico) {
-            // Ponemos en histórico la ubicación activa anterior
-            for (let i = 1; i < ubiData.length; i++) {
-              if (ubiData[i][1] === eqId && ubiData[i][6] === "Activo") {
-                sheetUbi.getRange(i + 1, 7).setValue("Histórico");
-              }
-            }
-            // Insertamos la nueva ubicación
-            sheetUbi.appendRow([
-              "UBI-" + Utilities.getUuid().substring(0,8).toUpperCase(), 
-              eqId, p.departamento, p.distrito, p.competencia || "Distrital", 
-              p.lugar_especifico, "Activo"
-            ]);
-        }
-      });
-    }
 
     logAuditActivity("CREATE", "APP_RESOLUCIONES", formData.id_resolucion);
     return { success: true };
@@ -257,270 +389,127 @@ function processResolutionUpload(fileData, formData) {
 
 function updateResolucionTransaction(payload) {
   return runWithRetry(() => {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheetRes = ss.getSheetByName("APP_RESOLUCIONES");
-    const resData = sheetRes.getDataRange().getValues();
-    let originalRes = null; const rowsToDelete = [];
+    requerirEditor("Resoluciones");
+    const db = getFirestore();
+    const idSafeAnterior = String(payload.id_original).trim().toUpperCase().replace(/\//g, '_');
+    const idSafeNuevo = String(payload.id_nuevo).trim().toUpperCase().replace(/\//g, '_');
     
-    for (let i = 1; i < resData.length; i++) {
-      if (String(resData[i][0]).trim() === payload.id_original) {
-        if (!originalRes) originalRes = { fEmi: resData[i][3], fVen: resData[i][4], st: resData[i][5], url: resData[i][6] };
-        rowsToDelete.push(i + 1);
-      }
-    }
+    let originalRes;
+    try {
+      originalRes = unwrapFirestoreDoc(db.getDocument(`APP_RESOLUCIONES/${idSafeAnterior}`));
+    } catch(e) { throw new Error("Resolución original no encontrada."); }
 
-    if (!originalRes) throw new Error("Resolución original no encontrada.");
-    for (let i = rowsToDelete.length - 1; i >= 0; i--) sheetRes.deleteRow(rowsToDelete[i]);
+    if (idSafeAnterior !== idSafeNuevo) db.deleteDocument(`APP_RESOLUCIONES/${idSafeAnterior}`);
 
-    const equipos = Array.isArray(payload.id_equipo) ? payload.id_equipo : [payload.id_equipo];
-    
-    // CORRECCIÓN AQUÍ: Tomamos las fechas del payload (si las editaron), sino, usamos las originales.
-    const fEmiStr = payload.fecha_emision || (originalRes.fEmi instanceof Date ? originalRes.fEmi.toISOString().split('T')[0] : originalRes.fEmi);
-    const fVenStr = payload.vencimiento || (originalRes.fVen instanceof Date ? originalRes.fVen.toISOString().split('T')[0] : originalRes.fVen);
-    
-    const afectaId = payload.afecta || "";
-    
-    equipos.forEach(eqId => sheetRes.appendRow([payload.id_nuevo, payload.tipo_acto, afectaId, fEmiStr, fVenStr, originalRes.st, originalRes.url, "", eqId]));
+    originalRes.id_resolucion = payload.id_nuevo;
+    originalRes.tipo_acto = payload.tipo_acto;
+    originalRes.afecta = payload.afecta || "";
+    originalRes.fecha_emision = payload.fecha_emision || originalRes.fecha_emision;
+    originalRes.vencimiento = payload.vencimiento || originalRes.vencimiento;
+    originalRes.equipos_vinculados = Array.isArray(payload.id_equipo) ? payload.id_equipo : [payload.id_equipo];
 
-    if (payload.ubicaciones_equipos && Object.keys(payload.ubicaciones_equipos).length > 0) {
-      const sheetUbi = ss.getSheetByName("APP_UBICACIONES");
-      const ubiData = sheetUbi.getDataRange().getValues();
-      equipos.forEach(eqId => {
-        const p = payload.ubicaciones_equipos[eqId];
-        if(p && p.departamento && p.distrito && p.lugar_especifico) {
-            for (let i = 1; i < ubiData.length; i++) if (ubiData[i][1] === eqId && ubiData[i][6] === "Activo") sheetUbi.getRange(i + 1, 7).setValue("Histórico");
-            sheetUbi.appendRow(["UBI-" + Utilities.getUuid().substring(0,8).toUpperCase(), eqId, p.departamento, p.distrito, p.competencia || "Distrital", p.lugar_especifico, "Activo"]);
-        }
-      });
-    }
+    db.updateDocument(`APP_RESOLUCIONES/${idSafeNuevo}`, originalRes);
 
     logAuditActivity("UPDATE", "APP_RESOLUCIONES", payload.id_original);
     return true;
   });
 }
 
-// ================= GESTOR DE EMPRESAS =================
-function saveEmpresaTransaction(p) {
-  return runWithRetry(() => {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("APP_EMPRESAS");
-    const data = sheet.getDataRange().getValues();
-    let idx = -1; for (let i = 1; i < data.length; i++) if (data[i][0] === p.id_empresa) { idx = i + 1; break; }
-    const row = [p.id_empresa.toUpperCase(), p.razon_social, p.ruc, p.representante, p.email, p.direccion, p.tipo_entidad, p.actividad_principal];
-    
-    if (p.isUpdate && idx > -1) { sheet.getRange(idx, 1, 1, row.length).setValues([row]); logAuditActivity("UPDATE", "APP_EMPRESAS", p.id_empresa); } 
-    else { if (idx > -1) throw new Error("ID ya existe."); sheet.appendRow(row); logAuditActivity("CREATE", "APP_EMPRESAS", p.id_empresa); }
-    return true;
-  });
-}
-
-function deleteEmpresaTransaction(id) {
-  return runWithRetry(() => {
-    const eqSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("APP_EQUIPOS");
-    if (eqSheet && eqSheet.getLastRow() > 1 && eqSheet.getDataRange().getValues().some((row, i) => i > 0 && row[1] === id)) throw new Error(`La empresa ${id} tiene Equipos vinculados.`);
-    
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("APP_EMPRESAS");
-    const data = sheet.getDataRange().getValues();
-    for (let i = 1; i < data.length; i++) if (data[i][0] === id) { sheet.deleteRow(i + 1); logAuditActivity("DELETE", "APP_EMPRESAS", id); return true; }
-    throw new Error("Empresa no encontrada.");
-  });
-}
-
-// ================= GESTOR DE EQUIPOS =================
-function saveEquipoTransaction(p) {
-  return runWithRetry(() => {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName("APP_EQUIPOS");
-    let fId = p.id_registro;
-
-    if (!p.isUpdate) {
-      const confSheet = ss.getSheetByName("APP_CONFIGURACION");
-      const cData = confSheet.getDataRange().getValues();
-      let cRow = -1, curr = "ESP000";
-      for(let i = 1; i < cData.length; i++) if(cData[i][0] === "NUMERACION_EQUIPOS") { curr = cData[i][1]; cRow = i + 1; break; }
-      fId = "ESP" + String((parseInt(curr.replace("ESP", "")) || 0) + 1).padStart(3, '0');
-      if(cRow > -1) confSheet.getRange(cRow, 2).setValue(fId);
-    }
-
-    const data = sheet.getDataRange().getValues();
-    let idx = -1; if (p.isUpdate) { for (let i = 1; i < data.length; i++) if (String(data[i][0]).toUpperCase() === fId.toUpperCase()) { idx = i + 1; break; } }
-    const row = [fId, p.id_empresa, p.descripcion, p.marca, p.serial_psicometrico, p.serial_sensometrico, p.estado_homologacion || ""];
-
-    if (p.isUpdate && idx > -1) { sheet.getRange(idx, 1, 1, row.length).setValues([row]); logAuditActivity("UPDATE", "APP_EQUIPOS", fId); } 
-    else { sheet.appendRow(row); logAuditActivity("CREATE", "APP_EQUIPOS", fId); }
-    return true;
-  });
-}
-
-function deleteEquipoTransaction(id) {
-  return runWithRetry(() => {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    if (ss.getSheetByName("APP_RESOLUCIONES").getDataRange().getValues().some((r, i) => i > 0 && r[8] === id)) throw new Error("El equipo tiene Resoluciones.");
-    if (ss.getSheetByName("APP_UBICACIONES").getDataRange().getValues().some((r, i) => i > 0 && r[1] === id)) throw new Error("El equipo tiene Ubicaciones.");
-    
-    const sheet = ss.getSheetByName("APP_EQUIPOS");
-    const data = sheet.getDataRange().getValues();
-    for (let i = 1; i < data.length; i++) if (String(data[i][0]) === id) { sheet.deleteRow(i + 1); logAuditActivity("DELETE", "APP_EQUIPOS", id); return true; }
-    throw new Error("Equipo no encontrado.");
-  });
-}
-
-// ================= GESTOR DE UBICACIONES =================
-function saveUbicacionTransaction(p) {
-  return runWithRetry(() => {
-    requerirEditor("Ubicaciones");
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName("APP_UBICACIONES");
-    const data = sheet.getDataRange().getValues();
-    const hoy = new Date().toISOString().split('T')[0];
-
-    // Evitar duplicados idénticos
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][1] === p.id_equipo && data[i][6] === "Activo") {
-        if (data[i][2] === p.departamento && data[i][3] === p.distrito && data[i][5] === p.lugar_especifico) {
-          throw new Error("El equipo ya se encuentra en esta ubicación exacta.");
-        }
-        // Cerrar ubicación anterior como Histórico
-        sheet.getRange(i + 1, 7).setValue("Histórico");
-        sheet.getRange(i + 1, 8).setValue(hoy);
-      }
-    }
-
-    sheet.appendRow(["UBI-" + Utilities.getUuid().substring(0,8).toUpperCase(), p.id_equipo, p.departamento, p.distrito, p.competencia, p.lugar_especifico, p.estado_actual, ""]);
-    return true;
-  });
-}
-/**
- * Mantiene el frontend HTML limpio y centraliza los assets en el servidor.
- */
-
-// ================= UTILIDADES =================
-function getLogoBase64() {
-  return "https://i.postimg.cc/SxmBF7N1/Bitacora-Logo.png";
-}
-
-/**
- * ----------------------------------------------------------------------------
- * 13. MOTOR DEL TIEMPO (Cron Job Diario a las 00:00 hs)
- * ----------------------------------------------------------------------------
- */
-function cronJobControlDiario() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheetRes = ss.getSheetByName("APP_RESOLUCIONES");
-  const sheetEq = ss.getSheetByName("APP_EQUIPOS");
-  const sheetUbi = ss.getSheetByName("APP_UBICACIONES");
-
-  const resData = sheetRes.getDataRange().getValues();
-  const eqData = sheetEq.getDataRange().getValues();
-  const ubiData = sheetUbi.getDataRange().getValues();
-
-  const today = new Date();
-  today.setHours(0,0,0,0); 
-  const fechaHoyStr = today.toISOString().split('T')[0];
-  const vigentesPorEquipo = new Set();
-
-  // 1. Sincronizar Resoluciones
-  for (let i = 1; i < resData.length; i++) {
-    let tipoActo = resData[i][1];
-    let emision = new Date(resData[i][3]);
-    let vencimiento = new Date(resData[i][4]);
-    let debeEstarVigente = (today >= emision && today <= vencimiento);
-    let nuevoEstadoRes = debeEstarVigente ? "Vigente" : "No Vigente";
-    if (resData[i][5] !== nuevoEstadoRes) sheetRes.getRange(i + 1, 6).setValue(nuevoEstadoRes);
-    if (debeEstarVigente && (tipoActo === "1-Homologación" || tipoActo === "2-Renovación")) vigentesPorEquipo.add(String(resData[i][8]).trim());
-  }
-
-  // 2. Sincronizar Equipos y Ubicaciones con FECHA DE CIERRE
-  for (let i = 1; i < eqData.length; i++) {
-    let idEq = String(eqData[i][0]).trim();
-    let esHomologado = vigentesPorEquipo.has(idEq);
-    let nuevoEstadoEq = esHomologado ? "Homologado" : "No Homologado";
-    if (eqData[i][6] !== nuevoEstadoEq) sheetEq.getRange(i + 1, 7).setValue(nuevoEstadoEq);
-
-    // Regla para Ubicaciones
-    let nuevoEstadoUbi = esHomologado ? "Activo" : "Inactivo";
-    for (let j = 1; j < ubiData.length; j++) {
-      if (String(ubiData[j][1]).trim() === idEq && (ubiData[j][6] === "Activo" || ubiData[j][6] === "Inactivo")) {
-        if (ubiData[j][6] !== nuevoEstadoUbi) {
-          sheetUbi.getRange(j + 1, 7).setValue(nuevoEstadoUbi);
-          // Si pasa a Inactivo ponemos fecha, si vuelve a Activo la borramos
-          sheetUbi.getRange(j + 1, 8).setValue(nuevoEstadoUbi === "Inactivo" ? fechaHoyStr : "");
-        }
-      }
-    }
-  }
-}
-
-/**
- * ----------------------------------------------------------------------------
- * 14. GESTOR DE CONFIGURACIÓN DEL SISTEMA
- * ----------------------------------------------------------------------------
- */
+// ================= GESTORES DE USUARIO Y CONFIG =================
 function saveConfigTransaction(payloadArray) {
   return runWithRetry(() => {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("APP_CONFIGURACION");
-    const data = sheet.getDataRange().getValues();
-
-    // Recorrer lo que envió el frontend y actualizar fila por fila
+    requerirEditor("Configuracion");
+    const db = getFirestore();
     payloadArray.forEach(item => {
-      for (let i = 1; i < data.length; i++) {
-        if (String(data[i][0]).trim() === item.clave) {
-          sheet.getRange(i + 1, 2).setValue(item.valor); // Columna B (valor)
-          sheet.getRange(i + 1, 4).setValue(new Date().toISOString()); // Columna D (ultima_modificacion)
-          break;
-        }
-      }
+      item.ultima_modificacion = new Date().toISOString();
+      db.updateDocument(`APP_CONFIGURACION/${item.clave}`, item);
     });
-
-    logAuditActivity("UPDATE", "APP_CONFIGURACION", "Ajuste de parámetros del sistema");
+    logAuditActivity("UPDATE", "APP_CONFIGURACION", "Ajuste de parámetros");
     return true;
   });
 }
 
-/**
- * ----------------------------------------------------------------------------
- * 15. GESTOR DE USUARIOS Y PERMISOS
- * ----------------------------------------------------------------------------
- */
 function saveUsuarioTransaction(p) {
   return runWithRetry(() => {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("APP_USUARIOS");
-    const data = sheet.getDataRange().getValues();
-    let idx = -1;
-    
-    for (let i = 1; i < data.length; i++) {
-      if (String(data[i][0]).trim().toLowerCase() === p.email.trim().toLowerCase()) { 
-        idx = i + 1; break; 
-      }
+    if(Session.getActiveUser().getEmail() !== "jundanielvallejostaniwaki@gmail.com" && p.rol === "Admin") {
+       throw new Error("Solo el Super Administrador puede crear otros Admins.");
     }
     
-    // Convertimos el objeto de permisos a texto JSON para guardarlo
-    const permisosStr = JSON.stringify(p.permisos);
-    const row = [p.email.trim().toLowerCase(), p.rol, permisosStr, p.estado, p.ultimo_acceso || "", p.avatar || ""];
+    const db = getFirestore();
+    const docId = String(p.email).trim().toLowerCase().replace(/\//g, '_');
+    
+    if (!p.isUpdate) {
+      try {
+        db.getDocument(`APP_USUARIOS/${docId}`);
+        throw new Error("El correo ya está registrado.");
+      } catch(e) { if(e.message.includes("registrado")) throw e; }
+    }
 
-    if (p.isUpdate && idx > -1) { 
-      sheet.getRange(idx, 1, 1, row.length).setValues([row]); 
-      logAuditActivity("UPDATE", "APP_USUARIOS", p.email); 
-    } else { 
-      if (idx > -1) throw new Error("El correo ya está registrado."); 
-      sheet.appendRow(row); 
-      logAuditActivity("CREATE", "APP_USUARIOS", p.email); 
-    }
+    const payload = {
+      email: p.email.trim().toLowerCase(), rol: p.rol, 
+      permisos: typeof p.permisos === 'object' ? JSON.stringify(p.permisos) : p.permisos, 
+      estado: p.estado, ultimo_acceso: p.ultimo_acceso || "", avatar: p.avatar || ""
+    };
+
+    db.updateDocument(`APP_USUARIOS/${docId}`, payload);
+    logAuditActivity(p.isUpdate ? "UPDATE" : "CREATE", "APP_USUARIOS", p.email); 
     return true;
   });
 }
 
 function deleteUsuarioTransaction(email) {
   return runWithRetry(() => {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("APP_USUARIOS");
-    const data = sheet.getDataRange().getValues();
-    for (let i = 1; i < data.length; i++) {
-      if (String(data[i][0]).trim().toLowerCase() === email.trim().toLowerCase()) { 
-        sheet.deleteRow(i + 1); 
-        logAuditActivity("DELETE", "APP_USUARIOS", email); 
-        return true; 
-      }
-    }
-    throw new Error("Usuario no encontrado.");
+    const docId = String(email).trim().toLowerCase().replace(/\//g, '_');
+    getFirestore().deleteDocument(`APP_USUARIOS/${docId}`);
+    logAuditActivity("DELETE", "APP_USUARIOS", email); 
+    return true;
   });
 }
 
+// ================= CRON JOB DIARIO =================
+function cronJobControlDiario() {
+  const db = getFirestore();
+  const resoluciones = getCollectionData("APP_RESOLUCIONES");
+  const equipos = getCollectionData("APP_EQUIPOS");
+  const ubicaciones = getCollectionData("APP_UBICACIONES");
+
+  const today = new Date();
+  today.setHours(0,0,0,0); 
+  const fechaHoyStr = today.toISOString().split('T')[0];
+  const vigentesPorEquipo = new Set();
+
+  resoluciones.forEach(res => {
+    let emision = new Date(res.fecha_emision);
+    let vencimiento = new Date(res.vencimiento);
+    let debeEstarVigente = (today >= emision && today <= vencimiento);
+    let nuevoEstadoRes = debeEstarVigente ? "Vigente" : "No Vigente";
+    
+    if (res.estado !== nuevoEstadoRes) {
+      res.estado = nuevoEstadoRes;
+      db.updateDocument(`APP_RESOLUCIONES/${res.id_resolucion.replace(/\//g, '_')}`, res);
+    }
+    
+    if (debeEstarVigente && (res.tipo_acto === "1-Homologación" || res.tipo_acto === "2-Renovación")) {
+      (res.equipos_vinculados || []).forEach(eqId => vigentesPorEquipo.add(eqId.trim()));
+    }
+  });
+
+  equipos.forEach(eq => {
+    let esHomologado = vigentesPorEquipo.has(String(eq.id_registro).trim());
+    let nuevoEstadoEq = esHomologado ? "Homologado" : "No Homologado";
+    
+    if (eq.estado_homologacion !== nuevoEstadoEq) {
+      eq.estado_homologacion = nuevoEstadoEq;
+      db.updateDocument(`APP_EQUIPOS/${eq.id_registro}`, eq);
+    }
+
+    let nuevoEstadoUbi = esHomologado ? "Activo" : "Inactivo";
+    ubicaciones.filter(u => String(u.id_equipo).trim() === String(eq.id_registro).trim() && (u.estado_actual === "Activo" || u.estado_actual === "Inactivo")).forEach(u => {
+      if (u.estado_actual !== nuevoEstadoUbi) {
+        u.estado_actual = nuevoEstadoUbi;
+        u.fecha_cierre = (nuevoEstadoUbi === "Inactivo") ? fechaHoyStr : "";
+        db.updateDocument(`APP_UBICACIONES/${u.id_ubicacion}`, u);
+      }
+    });
+  });
+}
